@@ -1,0 +1,30 @@
+import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import { router } from "expo-router";
+import { Share, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+
+import { ScreenContainer } from "@/components/screen-container";
+import { colors, InfoCard, PrimaryButton, SecondaryButton } from "@/components/urbico-ui";
+import { useUrbico } from "@/lib/urbico-context";
+
+export default function TripScreen() {
+  const { crowdReports, endTrip } = useUrbico();
+  const latestCrowd = crowdReports.at(-1);
+  const shareTrip = async () => {
+    await Share.share({ message: "Estou acompanhando uma viagem pelo Urbico. Acompanhe meu status pelo aplicativo." });
+  };
+  const finish = () => { endTrip(); router.replace("/"); };
+
+  return (
+    <ScreenContainer>
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <View style={styles.header}><Pressable onPress={() => router.back()} style={({ pressed }) => [styles.back, pressed && styles.pressed]}><MaterialIcons name="arrow-back" size={22} color={colors.text} /></Pressable><Text style={styles.title}>Minha viagem</Text><Pressable onPress={() => void shareTrip()} style={({ pressed }) => [styles.back, pressed && styles.pressed]}><MaterialIcons name="share" size={21} color={colors.text} /></Pressable></View>
+        <InfoCard style={styles.tripCard}><View style={styles.busBox}><MaterialIcons name="directions-bus" size={28} color={colors.blue} /></View><View style={{ flex: 1 }}><Text style={styles.tripTitle}>Preparando acompanhamento</Text><Text style={styles.tripSubtitle}>A linha e o destino aparecem assim que a viagem for identificada.</Text></View></InfoCard>
+        <InfoCard style={styles.nextCard}><Text style={styles.sectionLabel}>PRÓXIMA PARADA</Text><Text style={styles.nextTitle}>Aguardando sua rota</Text><Text style={styles.nextText}>O Norby avisará sobre a próxima parada quando tivermos posição, trajeto e previsão disponíveis.</Text><View style={styles.timeline}><View style={styles.activeLine} /><View style={styles.timelineDotActive} /><View style={[styles.timelineDot, { top: 71 }]} /><View style={[styles.timelineDot, { top: 111 }]} /><View style={[styles.timelineDot, { top: 151 }]} /><View style={styles.timelineCopy}><Text style={styles.timelineHeadline}>Acompanhamento iniciado</Text><Text style={styles.timelineBody}>Você receberá atualizações relevantes, sem excesso de notificações.</Text></View></View></InfoCard>
+        <View style={styles.twoCards}><InfoCard style={styles.smallCard}><View style={styles.smallIcon}><MaterialIcons name="groups" size={20} color={colors.amber} /></View><Text style={styles.smallLabel}>LOTAÇÃO ATUAL</Text><Text style={styles.smallTitle}>{latestCrowd ?? "Não informada"}</Text><Text style={styles.smallHint}>{latestCrowd ? "Baseado no seu último relato" : "Envie um relato anônimo"}</Text></InfoCard><InfoCard style={styles.smallCard}><View style={styles.smallIcon}><MaterialIcons name="notifications-active" size={20} color={colors.cyan} /></View><Text style={styles.smallLabel}>NORBY</Text><Text style={styles.smallTitle}>Pronto para ajudar</Text><Text style={styles.smallHint}>Alertas da viagem aparecem aqui.</Text></InfoCard></View>
+        <View style={styles.actions}><SecondaryButton label="Relatar lotação" icon="groups" onPress={() => router.push("/crowd-report")} style={{ flex: 1 }} /><SecondaryButton label="Segurança" icon="shield" onPress={() => router.push("/security")} style={{ flex: 1 }} /></View>
+        <PrimaryButton label="ENCERRAR VIAGEM" icon="stop-circle" onPress={finish} style={styles.finish} />
+      </ScrollView>
+    </ScreenContainer>
+  );
+}
+const styles = StyleSheet.create({ content: { padding: 20, paddingTop: 10, paddingBottom: 30 }, header: { height: 50, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }, back: { width: 42, height: 42, alignItems: "center", justifyContent: "center" }, title: { color: colors.text, fontSize: 18, fontWeight: "700" }, tripCard: { marginTop: 20, flexDirection: "row", gap: 14, alignItems: "center" }, busBox: { width: 54, height: 54, borderRadius: 15, backgroundColor: colors.blueSoft, alignItems: "center", justifyContent: "center" }, tripTitle: { color: colors.text, fontSize: 16, fontWeight: "700" }, tripSubtitle: { marginTop: 4, color: colors.muted, fontSize: 12, lineHeight: 17 }, nextCard: { marginTop: 14 }, sectionLabel: { color: colors.cyan, fontSize: 10, fontWeight: "800", letterSpacing: 1 }, nextTitle: { marginTop: 7, color: colors.text, fontSize: 20, lineHeight: 26, fontWeight: "700" }, nextText: { marginTop: 5, color: colors.muted, fontSize: 12, lineHeight: 18 }, timeline: { height: 184, marginTop: 18, paddingLeft: 30, position: "relative" }, activeLine: { position: "absolute", top: 7, bottom: 7, left: 7, width: 3, borderRadius: 2, backgroundColor: colors.blue }, timelineDotActive: { position: "absolute", top: 0, left: 0, width: 17, height: 17, borderRadius: 9, backgroundColor: colors.blue, borderWidth: 4, borderColor: "#A5EDFF" }, timelineDot: { position: "absolute", left: 2, width: 13, height: 13, borderRadius: 7, backgroundColor: colors.card, borderWidth: 2, borderColor: colors.muted }, timelineCopy: { paddingTop: 0 }, timelineHeadline: { color: colors.text, fontSize: 14, fontWeight: "700" }, timelineBody: { marginTop: 5, color: colors.muted, fontSize: 12, lineHeight: 18 }, twoCards: { flexDirection: "row", gap: 10, marginTop: 14 }, smallCard: { flex: 1, padding: 14 }, smallIcon: { width: 32, height: 32, borderRadius: 10, backgroundColor: colors.blueSoft, alignItems: "center", justifyContent: "center" }, smallLabel: { marginTop: 12, color: colors.muted, fontSize: 9, fontWeight: "800", letterSpacing: 0.5 }, smallTitle: { marginTop: 5, color: colors.text, fontSize: 13, lineHeight: 18, fontWeight: "700" }, smallHint: { marginTop: 4, color: colors.muted, fontSize: 10, lineHeight: 14 }, actions: { marginTop: 14, flexDirection: "row", gap: 10 }, finish: { marginTop: 17, backgroundColor: colors.red }, pressed: { opacity: 0.7, transform: [{ scale: 0.98 }] } });

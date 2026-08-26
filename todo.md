@@ -1,0 +1,25 @@
+# Project TODO
+
+- [x] Implementar a identidade visual e o ícone próprio do Urbico.
+- [x] Estruturar a navegação principal para Início, Rotas, Mapa, Agenda e Perfil.
+- [x] Construir a Home centrada no Norby, favoritos e estado de próximas partidas.
+- [x] Construir a conversa híbrida do Norby com texto, estados de voz e ações de interrupção.
+- [x] Criar o planejamento de rotas com origem, destino, alternativas e resumo compreensível.
+- [x] Construir o mapa de mobilidade com estados seguros de dados indisponíveis.
+- [x] Implementar o acompanhamento de viagem e o fluxo de encerramento manual.
+- [x] Criar o fluxo anônimo de relato de lotação.
+- [x] Criar a gestão local de favoritos, incluindo casa, trabalho e locais recorrentes.
+- [x] Criar a agenda local de compromissos e o cálculo indicativo do horário de saída.
+- [x] Criar perfil, preferências de notificação, privacidade e configurações do Norby.
+- [x] Persistir dados locais não sensíveis com armazenamento do dispositivo.
+- [x] Criar interfaces de repositório para dados de trânsito e rotas, sem credenciais no cliente.
+- [ ] Integrar dados oficiais da SPTrans somente após receber token rotacionado por canal seguro.
+- [ ] Integrar mapa e roteamento somente após receber chaves rotacionadas e restritas por canal seguro.
+- [ ] Implementar a IA remota do Norby no backend após configurar uma credencial segura.
+- [ ] Implementar reconhecimento de voz, síntese remota e notificações de viagem após configurações seguras.
+- [ ] Implementar compartilhamento nativo de viagem e contato de confiança.
+- [ ] Desenvolver o aplicativo administrativo separado e métricas operacionais.
+- [x] Validar tipagem, fluxos de navegação e persistência local.
+- [x] Adaptar a interface para o sistema visual escuro, a hierarquia e os cartões do mockup fornecido.
+- [x] Ajustar a navegação inferior para Início, Mapa, Norby e Perfil, mantendo Rotas como fluxo contextual.
+- [x] Adaptar Home, Mapa, Norby, Rotas, Viagem, Segurança e Perfil à referência visual enviada.
