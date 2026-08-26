@@ -28,8 +28,8 @@ export default function MapScreen() {
         </View>
 
         <InfoCard style={styles.bottomCard}>
-          <View style={styles.bottomHeader}><View style={styles.busMini}><MaterialIcons name="directions-bus" size={21} color={colors.blue} /></View><Text style={styles.bottomTitle}>{selectedLayer ? `Camada: ${selectedLayer}` : "Dados em conexão"}</Text></View>
-          <Text style={styles.bottomText}>{selectedLayer ? "A seleção exibirá linha, destino, previsão, distância e lotação quando os dados oficiais estiverem disponíveis." : "O mapa ficará pronto para mostrar sua posição, paradas, ônibus e a rota selecionada assim que você autorizar a localização e conectar o transporte."}</Text>
+          <View style={styles.bottomHeader}><View style={styles.busMini}><MaterialIcons name="directions-bus" size={21} color={colors.blue} /></View><Text style={styles.bottomTitle}>{selectedLayer ? `Camada: ${selectedLayer}` : "Dados por linha"}</Text></View>
+          <Text style={styles.bottomText}>{selectedLayer ? "Abra a consulta de linhas para selecionar um percurso e acessar os veículos e paradas retornados pela SPTrans." : "Use as camadas para organizar a visualização. A consulta por linha traz os dados oficiais; localização do dispositivo continua sob sua autorização."}</Text>
           <View style={styles.bottomActions}>
             <PrimaryButton label="Planejar rota" icon="alt-route" onPress={() => router.push("/routes")} style={{ flex: 1 }} />
             <Pressable onPress={() => setSelectedLayer(selectedLayer === "paradas" ? null : "paradas")} style={({ pressed }) => [styles.layerButton, pressed && styles.pressed]}><MaterialIcons name="layers" size={21} color={colors.blue} /></Pressable>

@@ -6,6 +6,7 @@ import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from "react-na
 import { ScreenContainer } from "@/components/screen-container";
 import { colors } from "@/components/urbico-ui";
 import { useUrbico } from "@/lib/urbico-context";
+import { trpc } from "@/lib/trpc";
 
 const prompts = [
   { text: "Como chego ao trabalho?", icon: "business-center" as const },
@@ -15,27 +16,36 @@ const prompts = [
 ];
 
 export default function NorbyScreen() {
-  const { messages, sendMessage, voiceEnabled } = useUrbico();
+  const { messages, sendMessage, addNorbyMessage, voiceEnabled } = useUrbico();
   const [draft, setDraft] = useState("");
   const [isListening, setIsListening] = useState(false);
   const [showConversation, setShowConversation] = useState(false);
+  const chatMutation = trpc.norby.chat.useMutation();
 
-  const submit = () => {
-    if (!draft.trim()) return;
-    sendMessage(draft);
+  const askNorby = async (question: string) => {
+    const message = question.trim();
+    if (!message) return;
+    sendMessage(message);
     setDraft("");
     setShowConversation(true);
+    try {
+      const response = await chatMutation.mutateAsync({ message });
+      addNorbyMessage(response.message);
+    } catch {
+      addNorbyMessage("Não consegui consultar o serviço do Norby agora. Tente novamente em instantes.");
+    }
   };
 
-  const choosePrompt = (text: string) => { sendMessage(text); setShowConversation(true); };
+  const submit = () => { void askNorby(draft); };
+  const choosePrompt = (text: string) => { void askNorby(text); };
 
   if (showConversation) {
     return (
       <ScreenContainer>
         <View style={styles.chatScreen}>
-          <View style={styles.chatHeader}><Pressable onPress={() => setShowConversation(false)} style={({ pressed }) => [styles.back, pressed && styles.pressed]}><MaterialIcons name="arrow-back" size={22} color={colors.text} /></Pressable><View style={styles.chatHeaderName}><View style={styles.headerRobot}><MaterialIcons name="smart-toy" size={19} color={colors.cyan} /></View><View><Text style={styles.chatTitle}>Norby</Text><Text style={styles.chatStatus}>{isListening ? "Norby está ouvindo..." : "Assistente de mobilidade"}</Text></View></View><Pressable onPress={() => setIsListening((value) => !value)} style={({ pressed }) => [styles.micHeader, isListening && styles.micHeaderActive, pressed && styles.pressed]}><MaterialIcons name="mic" size={20} color={isListening ? "#FFFFFF" : colors.blue} /></Pressable></View>
+          <View style={styles.chatHeader}><Pressable onPress={() => setShowConversation(false)} style={({ pressed }) => [styles.back, pressed && styles.pressed]}><MaterialIcons name="arrow-back" size={22} color={colors.text} /></Pressable><View style={styles.chatHeaderName}><View style={styles.headerRobot}><MaterialIcons name="smart-toy" size={19} color={colors.cyan} /></View><View><Text style={styles.chatTitle}>Norby</Text><Text style={styles.chatStatus}>{chatMutation.isPending ? "Norby está respondendo..." : isListening ? "Norby está ouvindo..." : "Assistente de mobilidade"}</Text></View></View><Pressable onPress={() => setIsListening((value) => !value)} style={({ pressed }) => [styles.micHeader, isListening && styles.micHeaderActive, pressed && styles.pressed]}><MaterialIcons name="mic" size={20} color={isListening ? "#FFFFFF" : colors.blue} /></Pressable></View>
           <FlatList data={messages} keyExtractor={(item) => item.id} contentContainerStyle={styles.messageList} renderItem={({ item }) => <View style={[styles.message, item.role === "user" ? styles.userMessage : styles.norbyMessage]}><Text style={[styles.messageText, item.role === "user" && styles.userMessageText]}>{item.content}</Text></View>} />
-          <View style={styles.composer}><TextInput value={draft} onChangeText={setDraft} onSubmitEditing={submit} placeholder="Escreva para o Norby" placeholderTextColor={colors.muted} style={styles.composerInput} returnKeyType="send" /><Pressable onPress={() => setIsListening((value) => !value)} style={({ pressed }) => [styles.composerMic, isListening && styles.composerMicActive, pressed && styles.pressed]}><MaterialIcons name="mic" size={21} color={isListening ? "#FFFFFF" : colors.blue} /></Pressable><Pressable onPress={submit} style={({ pressed }) => [styles.send, pressed && styles.pressed]}><MaterialIcons name="send" size={20} color="#FFFFFF" /></Pressable></View>
+          <View style={styles.composer}><TextInput editable={!chatMutation.isPending} value={draft} onChangeText={setDraft} onSubmitEditing={submit} placeholder="Escreva para o Norby" placeholderTextColor={colors.muted} style={styles.composerInput} returnKeyType="send" /><Pressable onPress={() => setIsListening((value) => !value)} style={({ pressed }) => [styles.composerMic, isListening && styles.composerMicActive, pressed && styles.pressed]}><MaterialIcons name="mic" size={21} color={isListening ? "#FFFFFF" : colors.blue} /></Pressable><Pressable disabled={chatMutation.isPending} onPress={submit} style={({ pressed }) => [styles.send, (pressed || chatMutation.isPending) && styles.pressed]}><MaterialIcons name={chatMutation.isPending ? "hourglass-top" : "send"} size={20} color="#FFFFFF" /></Pressable></View>
         </View>
       </ScreenContainer>
     );

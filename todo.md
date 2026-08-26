@@ -13,9 +13,9 @@
 - [x] Criar perfil, preferências de notificação, privacidade e configurações do Norby.
 - [x] Persistir dados locais não sensíveis com armazenamento do dispositivo.
 - [x] Criar interfaces de repositório para dados de trânsito e rotas, sem credenciais no cliente.
-- [ ] Integrar dados oficiais da SPTrans somente após receber token rotacionado por canal seguro.
+- [x] Integrar dados oficiais da SPTrans somente após receber token rotacionado por canal seguro.
 - [ ] Integrar mapa e roteamento somente após receber chaves rotacionadas e restritas por canal seguro.
-- [ ] Implementar a IA remota do Norby no backend após configurar uma credencial segura.
+- [x] Implementar a IA remota do Norby no backend após configurar uma credencial segura.
 - [ ] Implementar reconhecimento de voz, síntese remota e notificações de viagem após configurações seguras.
 - [ ] Implementar compartilhamento nativo de viagem e contato de confiança.
 - [ ] Desenvolver o aplicativo administrativo separado e métricas operacionais.
@@ -23,3 +23,11 @@
 - [x] Adaptar a interface para o sistema visual escuro, a hierarquia e os cartões do mockup fornecido.
 - [x] Ajustar a navegação inferior para Início, Mapa, Norby e Perfil, mantendo Rotas como fluxo contextual.
 - [x] Adaptar Home, Mapa, Norby, Rotas, Viagem, Segurança e Perfil à referência visual enviada.
+- [x] Criar endpoints protegidos no backend para SPTrans, GraphHopper e Norby, sem chaves no aplicativo.
+- [x] Configurar tokens rotacionados de SPTrans e GraphHopper pelo armazenamento seguro do projeto.
+- [x] Conectar partidas próximas, consulta de linha, posição de veículos e previsão da SPTrans às telas.
+- [x] Conectar geocodificação e planejamento de rotas do GraphHopper ao fluxo de Rotas.
+- [x] Conectar respostas do Norby a um serviço de IA protegido no backend.
+- [ ] Configurar notificações e identidade de push após o provisionamento seguro do Firebase.
+- [x] Revisar bloqueios de segredos, variáveis de ambiente e rotas de backend antes da publicação.
+- [x] Configurar canal e permissão local de notificações de viagem no dispositivo.

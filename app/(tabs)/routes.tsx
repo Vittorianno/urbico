@@ -6,13 +6,27 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-
 import { ScreenContainer } from "@/components/screen-container";
 import { colors, PrimaryButton, SectionTitle } from "@/components/urbico-ui";
 import { useUrbico } from "@/lib/urbico-context";
+import { trpc } from "@/lib/trpc";
 
 export default function RoutesScreen() {
   const [origin, setOrigin] = useState("");
   const [destination, setDestination] = useState("");
   const { startTrip } = useUrbico();
   const ready = origin.trim().length > 1 && destination.trim().length > 1;
-  const start = () => { startTrip(); router.push("/trip"); };
+  const routeMutation = trpc.routing.planWalking.useMutation();
+  const plannedRoute = routeMutation.data?.route;
+  const walkingMinutes = plannedRoute ? Math.max(1, Math.ceil(plannedRoute.durationSeconds / 60)) : null;
+  const start = async () => {
+    if (!ready) return;
+    try {
+      const result = await routeMutation.mutateAsync({ origin, destination });
+      if (!result?.route) return;
+      startTrip();
+      router.push("/trip");
+    } catch {
+      return;
+    }
+  };
 
   return (
     <ScreenContainer>
@@ -21,10 +35,10 @@ export default function RoutesScreen() {
         <View style={styles.form}><View style={styles.field}><Text style={styles.fieldLabel}>De:</Text><TextInput value={origin} onChangeText={setOrigin} placeholder="Minha localização" placeholderTextColor={colors.muted} style={styles.input} /></View><View style={styles.divider} /><View style={styles.field}><Text style={styles.fieldLabel}>Para:</Text><TextInput value={destination} onChangeText={setDestination} placeholder="Digite um destino" placeholderTextColor={colors.muted} style={styles.input} /></View><Pressable onPress={() => { const previous = origin; setOrigin(destination); setDestination(previous); }} style={({ pressed }) => [styles.swap, pressed && styles.pressed]}><MaterialIcons name="swap-vert" size={19} color={colors.text} /></Pressable></View>
         <View style={styles.modeRow}><View style={styles.modeActive}><MaterialIcons name="directions-bus" size={20} color={colors.blue} /></View><View style={styles.mode}><MaterialIcons name="directions-car" size={20} color={colors.muted} /></View><View style={styles.mode}><MaterialIcons name="directions-walk" size={20} color={colors.muted} /></View></View>
         <SectionTitle title="Opções" />
-        <View style={[styles.routeCard, styles.bestRoute]}><View style={styles.routeHeader}><Text style={styles.routeCardTitle}>Melhor rota</Text><Text style={styles.routeCardTime}>{ready ? "Consultar" : "Aguardando"}</Text></View><Text style={styles.routeCardText}>{ready ? "A origem e o destino estão prontos para comparação com dados oficiais." : "Informe origem e destino para organizar caminhada, ônibus e conexões."}</Text><View style={styles.steps}><Step icon="directions-walk" label="Caminhada" /><View style={styles.stepLine} /><Step icon="directions-bus" label="Ônibus" /><View style={styles.stepLine} /><Step icon="directions-walk" label="Chegada" /></View></View>
+        <View style={[styles.routeCard, styles.bestRoute]}><View style={styles.routeHeader}><Text style={styles.routeCardTitle}>{plannedRoute ? "Melhor rota a pé" : "Melhor rota"}</Text><Text style={styles.routeCardTime}>{routeMutation.isPending ? "Calculando" : walkingMinutes ? `${walkingMinutes} min` : "Aguardando"}</Text></View><Text style={styles.routeCardText}>{plannedRoute ? `${Math.round(plannedRoute.distanceMeters)} m · ${plannedRoute.instructions.length} instruções para chegar ao destino.` : routeMutation.error ? "Não foi possível calcular esta rota. Revise os endereços e tente novamente." : ready ? "A origem e o destino estão prontos para consulta segura no serviço de rotas." : "Informe origem e destino para organizar caminhada, ônibus e conexões."}</Text><View style={styles.steps}><Step icon="directions-walk" label="Caminhada" /><View style={styles.stepLine} /><Step icon="directions-bus" label="Transporte" /><View style={styles.stepLine} /><Step icon="directions-walk" label="Chegada" /></View></View>
         <View style={styles.routeCard}><Text style={styles.routeCardTitle}>Alternativa 1</Text><Text style={styles.routeCardText}>Rotas alternativas serão exibidas após a disponibilidade de tráfego e transporte.</Text></View>
         <View style={styles.leaveNow}><MaterialIcons name="schedule" size={19} color={colors.muted} /><Text style={styles.leaveText}>Horário de saída será calculado para este trajeto.</Text></View>
-        <PrimaryButton label="INICIAR VIAGEM" icon="play-arrow" disabled={!ready} onPress={start} style={styles.start} />
+        <PrimaryButton label={routeMutation.isPending ? "CALCULANDO ROTA" : plannedRoute ? "INICIAR VIAGEM" : "CALCULAR ROTA"} icon={routeMutation.isPending ? "hourglass-top" : "play-arrow"} disabled={!ready || routeMutation.isPending} onPress={() => void start()} style={styles.start} />
       </ScrollView>
     </ScreenContainer>
   );

@@ -1,7 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createContext, type ReactNode, useContext, useEffect, useMemo, useState } from "react";
 
-import { createTripRecord, getNorbyReply } from "@/lib/urbico-logic";
+import { createTripRecord } from "@/lib/urbico-logic";
 
 export type CrowdLevel = "Vazio" | "Baixa" | "Normal" | "Alta" | "Lotado";
 
@@ -44,6 +44,7 @@ type UrbicoState = {
   addAppointment: (appointment: Omit<Appointment, "id">) => void;
   removeAppointment: (id: string) => void;
   sendMessage: (text: string) => void;
+  addNorbyMessage: (text: string) => void;
   addCrowdReport: (level: CrowdLevel) => void;
   startTrip: () => void;
   endTrip: () => void;
@@ -123,8 +124,12 @@ export function UrbicoProvider({ children }: { children: ReactNode }) {
         setMessages((current) => [
           ...current,
           { id: `user-${Date.now()}`, role: "user", content: trimmed },
-          { id: `norby-${Date.now() + 1}`, role: "assistant", content: getNorbyReply(trimmed) },
         ]);
+      },
+      addNorbyMessage: (text) => {
+        const trimmed = text.trim();
+        if (!trimmed) return;
+        setMessages((current) => [...current, { id: `norby-${Date.now()}`, role: "assistant", content: trimmed }]);
       },
       addCrowdReport: (level) => setCrowdReports((current) => [...current, level]),
       startTrip: () => setIsTripActive(true),

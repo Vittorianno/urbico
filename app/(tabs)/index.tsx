@@ -49,15 +49,15 @@ export default function HomeScreen() {
         </Pressable>
         <Text style={styles.speakHint}>Toque para falar ou escrever</Text>
 
-        <SectionTitle title="Próximos ônibus" action="Ver mapa" onAction={() => router.push("/map")} />
-        <InfoCard style={styles.transitState}>
+        <SectionTitle title="Próximos ônibus" action="Consultar linhas" onAction={() => router.push("/next-buses")} />
+        <Pressable onPress={() => router.push("/next-buses")} style={({ pressed }) => pressed && styles.pressed}><InfoCard style={styles.transitState}>
           <View style={styles.busIcon}><MaterialIcons name="directions-bus" size={23} color={colors.blue} /></View>
           <View style={{ flex: 1 }}>
-            <Text style={styles.cardTitle}>Aguardando atualização</Text>
-            <Text style={styles.cardText}>Linha, destino, previsão e lotação aparecerão aqui quando os dados de transporte estiverem conectados.</Text>
+            <Text style={styles.cardTitle}>Dados oficiais da SPTrans</Text>
+            <Text style={styles.cardText}>Consulte uma linha para ver veículos e paradas atualizados pela fonte oficial.</Text>
           </View>
           <MaterialIcons name="more-horiz" size={22} color={colors.muted} />
-        </InfoCard>
+        </InfoCard></Pressable>
 
         <SectionTitle title="Seus lugares" action="Editar" onAction={() => router.push("/favorites")} />
         <View style={styles.favoriteRow}>
