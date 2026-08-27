@@ -50,9 +50,12 @@ const config: ExpoConfig = {
   ios: {
     supportsTablet: true,
     bundleIdentifier: env.iosBundleId,
+    config: {
+      googleMapsApiKey: process.env.GOOGLE_MAPS_IOS_API_KEY ?? "",
+    },
     "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
-      }
+      "ITSAppUsesNonExemptEncryption": false
+    }
   },
   android: {
     adaptiveIcon: {
@@ -64,7 +67,12 @@ const config: ExpoConfig = {
     edgeToEdgeEnabled: true,
     predictiveBackGestureEnabled: false,
     package: env.androidPackage,
-    permissions: ["POST_NOTIFICATIONS"],
+    config: {
+      googleMaps: {
+        apiKey: process.env.GOOGLE_MAPS_ANDROID_API_KEY ?? "",
+      },
+    },
+    permissions: ["POST_NOTIFICATIONS", "ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION", "ACCESS_BACKGROUND_LOCATION", "FOREGROUND_SERVICE", "FOREGROUND_SERVICE_LOCATION"],
     intentFilters: [
       {
         action: "VIEW",
@@ -86,6 +94,24 @@ const config: ExpoConfig = {
   },
   plugins: [
     "expo-router",
+    [
+      "expo-location",
+      {
+        locationWhenInUsePermission: "Permita que o Urbico use sua localização para orientar deslocamentos.",
+        locationAlwaysAndWhenInUsePermission: "Permita que o Urbico acompanhe sua localização apenas durante alertas de saída ativados.",
+        isIosBackgroundLocationEnabled: true,
+        isAndroidBackgroundLocationEnabled: true,
+        isAndroidForegroundServiceEnabled: true,
+      },
+    ],
+    [
+      "expo-speech-recognition",
+      {
+        microphonePermission: "Permita que o Urbico use o microfone para conversar com o Norby.",
+        speechRecognitionPermission: "Permita que o Urbico reconheça sua fala para conversar com o Norby.",
+        androidSpeechServicePackages: ["com.google.android.googlequicksearchbox"],
+      },
+    ],
     [
       "expo-notifications",
       {

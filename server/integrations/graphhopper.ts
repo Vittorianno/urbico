@@ -23,13 +23,23 @@ async function graphhopperRequest<T>(path: string, init?: RequestInit): Promise<
   return (await response.json()) as T;
 }
 
-export async function geocode(query: string): Promise<GeocodedPlace | null> {
-  type GeocodeResponse = { hits?: Array<{ name?: string; point?: { lat?: number; lng?: number }; country?: string; city?: string; street?: string; housenumber?: string }> };
-  const data = await graphhopperRequest<GeocodeResponse>(`/geocode?q=${encodeURIComponent(query)}&limit=1&locale=pt_BR`);
-  const hit = data.hits?.[0];
-  if (!hit?.point || typeof hit.point.lat !== "number" || typeof hit.point.lng !== "number") return null;
+type GeocodeHit = { name?: string; point?: { lat?: number; lng?: number }; country?: string; city?: string; street?: string; housenumber?: string };
+type GeocodeResponse = { hits?: GeocodeHit[] };
+
+function mapGeocodeHit(hit: GeocodeHit, fallback: string): GeocodedPlace | null {
+  if (!hit.point || typeof hit.point.lat !== "number" || typeof hit.point.lng !== "number") return null;
   const address = [hit.street, hit.housenumber, hit.city, hit.country].filter(Boolean).join(", ");
-  return { name: hit.name ?? query, address: address || query, latitude: hit.point.lat, longitude: hit.point.lng };
+  return { name: hit.name ?? fallback, address: address || fallback, latitude: hit.point.lat, longitude: hit.point.lng };
+}
+
+export async function suggestAddresses(query: string): Promise<GeocodedPlace[]> {
+  const data = await graphhopperRequest<GeocodeResponse>(`/geocode?q=${encodeURIComponent(query)}&limit=5&locale=pt_BR`);
+  return (data.hits ?? []).map((hit) => mapGeocodeHit(hit, query)).filter((place): place is GeocodedPlace => Boolean(place));
+}
+
+export async function geocode(query: string): Promise<GeocodedPlace | null> {
+  const results = await suggestAddresses(query);
+  return results[0] ?? null;
 }
 
 export async function planWalkingRoute(origin: Coordinates, destination: Coordinates): Promise<WalkingRoute | null> {

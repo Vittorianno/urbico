@@ -1,4 +1,4 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
+import { boolean, decimal, int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
 
 /**
  * Core user table backing auth flow.
@@ -25,4 +25,23 @@ export const users = mysqlTable("users", {
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 
-// TODO: Add your tables here
+export const departureAlerts = mysqlTable("departure_alerts", {
+  id: int("id").autoincrement().primaryKey(),
+  installationId: varchar("installation_id", { length: 64 }).notNull().unique(),
+  appointmentLabel: varchar("appointment_label", { length: 160 }).notNull(),
+  appointmentAt: timestamp("appointment_at").notNull(),
+  lineId: int("line_id").notNull(),
+  destinationLatitude: decimal("destination_latitude", { precision: 10, scale: 7 }).notNull(),
+  destinationLongitude: decimal("destination_longitude", { precision: 10, scale: 7 }).notNull(),
+  latestLatitude: decimal("latest_latitude", { precision: 10, scale: 7 }),
+  latestLongitude: decimal("latest_longitude", { precision: 10, scale: 7 }),
+  locationConsented: boolean("location_consented").notNull().default(false),
+  isEnabled: boolean("is_enabled").notNull().default(true),
+  alertedAt: timestamp("alerted_at"),
+  scheduleCronTaskUid: varchar("schedule_cron_task_uid", { length: 65 }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+});
+
+export type DepartureAlert = typeof departureAlerts.$inferSelect;
+export type InsertDepartureAlert = typeof departureAlerts.$inferInsert;

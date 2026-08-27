@@ -9,6 +9,8 @@ export type Favorite = {
   id: string;
   label: string;
   address: string;
+  latitude?: number;
+  longitude?: number;
 };
 
 export type Appointment = {
@@ -17,7 +19,17 @@ export type Appointment = {
   date: string;
   time: string;
   address: string;
+  latitude?: number;
+  longitude?: number;
+  relevantLineId?: number;
+  relevantLineLabel?: string;
+  alertsEnabled?: boolean;
 };
+
+export type RoutePlace = { name: string; address: string; latitude: number; longitude: number };
+export type TransitContextLine = { id: number; label: string; destination: string; origin: string };
+export type ActiveRoute = { origin: RoutePlace; destination: RoutePlace; points: number[][]; distanceMeters: number; durationSeconds: number; line: TransitContextLine | null };
+export type CurrentLocation = { latitude: number; longitude: number; accuracy: number | null; capturedAt: number };
 
 export type ChatMessage = {
   id: string;
@@ -39,6 +51,9 @@ type UrbicoState = {
   isTripActive: boolean;
   notificationsEnabled: boolean;
   voiceEnabled: boolean;
+  activeRoute: ActiveRoute | null;
+  currentLocation: CurrentLocation | null;
+  locationSharingEnabled: boolean;
   addFavorite: (favorite: Omit<Favorite, "id">) => void;
   removeFavorite: (id: string) => void;
   addAppointment: (appointment: Omit<Appointment, "id">) => void;
@@ -50,6 +65,9 @@ type UrbicoState = {
   endTrip: () => void;
   setNotificationsEnabled: (enabled: boolean) => void;
   setVoiceEnabled: (enabled: boolean) => void;
+  setActiveRoute: (route: ActiveRoute | null) => void;
+  setCurrentLocation: (location: CurrentLocation | null) => void;
+  setLocationSharingEnabled: (enabled: boolean) => void;
 };
 
 const STORAGE_KEY = "urbico.local-state.v1";
@@ -76,13 +94,16 @@ export function UrbicoProvider({ children }: { children: ReactNode }) {
   const [isTripActive, setIsTripActive] = useState(false);
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [voiceEnabled, setVoiceEnabled] = useState(true);
+  const [activeRoute, setActiveRoute] = useState<ActiveRoute | null>(null);
+  const [currentLocation, setCurrentLocation] = useState<CurrentLocation | null>(null);
+  const [locationSharingEnabled, setLocationSharingEnabled] = useState(false);
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
     AsyncStorage.getItem(STORAGE_KEY)
       .then((stored) => {
         if (!stored) return;
-        const parsed = JSON.parse(stored) as Partial<Omit<UrbicoState, "addFavorite" | "removeFavorite" | "addAppointment" | "removeAppointment" | "sendMessage" | "addCrowdReport" | "startTrip" | "endTrip" | "setNotificationsEnabled" | "setVoiceEnabled">>;
+        const parsed = JSON.parse(stored) as Partial<Omit<UrbicoState, "addFavorite" | "removeFavorite" | "addAppointment" | "removeAppointment" | "sendMessage" | "addNorbyMessage" | "addCrowdReport" | "startTrip" | "endTrip" | "setNotificationsEnabled" | "setVoiceEnabled" | "setActiveRoute" | "setCurrentLocation" | "setLocationSharingEnabled">>;
         if (parsed.favorites) setFavorites(parsed.favorites);
         if (parsed.appointments) setAppointments(parsed.appointments);
         if (parsed.messages) setMessages(parsed.messages);
@@ -91,6 +112,9 @@ export function UrbicoProvider({ children }: { children: ReactNode }) {
         if (typeof parsed.isTripActive === "boolean") setIsTripActive(parsed.isTripActive);
         if (typeof parsed.notificationsEnabled === "boolean") setNotificationsEnabled(parsed.notificationsEnabled);
         if (typeof parsed.voiceEnabled === "boolean") setVoiceEnabled(parsed.voiceEnabled);
+        if (parsed.activeRoute) setActiveRoute(parsed.activeRoute);
+        if (parsed.currentLocation) setCurrentLocation(parsed.currentLocation);
+        if (typeof parsed.locationSharingEnabled === "boolean") setLocationSharingEnabled(parsed.locationSharingEnabled);
       })
       .catch(() => undefined)
       .finally(() => setHydrated(true));
@@ -100,9 +124,9 @@ export function UrbicoProvider({ children }: { children: ReactNode }) {
     if (!hydrated) return;
     AsyncStorage.setItem(
       STORAGE_KEY,
-      JSON.stringify({ favorites, appointments, messages, crowdReports, tripHistory, isTripActive, notificationsEnabled, voiceEnabled }),
+      JSON.stringify({ favorites, appointments, messages, crowdReports, tripHistory, isTripActive, notificationsEnabled, voiceEnabled, activeRoute, currentLocation, locationSharingEnabled }),
     ).catch(() => undefined);
-  }, [appointments, crowdReports, favorites, hydrated, isTripActive, messages, notificationsEnabled, tripHistory, voiceEnabled]);
+  }, [activeRoute, appointments, crowdReports, currentLocation, favorites, hydrated, isTripActive, locationSharingEnabled, messages, notificationsEnabled, tripHistory, voiceEnabled]);
 
   const value = useMemo<UrbicoState>(
     () => ({
@@ -114,6 +138,9 @@ export function UrbicoProvider({ children }: { children: ReactNode }) {
       isTripActive,
       notificationsEnabled,
       voiceEnabled,
+      activeRoute,
+      currentLocation,
+      locationSharingEnabled,
       addFavorite: (favorite) => setFavorites((current) => [...current, { ...favorite, id: `favorite-${Date.now()}` }]),
       removeFavorite: (id) => setFavorites((current) => current.filter((favorite) => favorite.id !== id)),
       addAppointment: (appointment) => setAppointments((current) => [...current, { ...appointment, id: `appointment-${Date.now()}` }]),
@@ -139,8 +166,11 @@ export function UrbicoProvider({ children }: { children: ReactNode }) {
       },
       setNotificationsEnabled,
       setVoiceEnabled,
+      setActiveRoute,
+      setCurrentLocation,
+      setLocationSharingEnabled,
     }),
-    [appointments, crowdReports, favorites, isTripActive, messages, notificationsEnabled, tripHistory, voiceEnabled],
+    [activeRoute, appointments, crowdReports, currentLocation, favorites, isTripActive, locationSharingEnabled, messages, notificationsEnabled, tripHistory, voiceEnabled],
   );
 
   return <UrbicoContext.Provider value={value}>{children}</UrbicoContext.Provider>;

@@ -1,4 +1,5 @@
 import "@/global.css";
+import "@/lib/departure-location-task";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";

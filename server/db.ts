@@ -1,6 +1,6 @@
-import { eq } from "drizzle-orm";
+import { and, eq, gt, isNull } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users } from "../drizzle/schema";
+import { departureAlerts, InsertDepartureAlert, InsertUser, users } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -89,4 +89,52 @@ export async function getUserByOpenId(openId: string) {
   return result.length > 0 ? result[0] : undefined;
 }
 
-// TODO: add feature queries here as your schema grows.
+export async function upsertDepartureAlert(alert: InsertDepartureAlert) {
+  const db = await getDb();
+  if (!db) throw new Error("Banco de dados indisponível para alertas de saída.");
+  await db.insert(departureAlerts).values(alert).onDuplicateKeyUpdate({
+    set: {
+      appointmentLabel: alert.appointmentLabel,
+      appointmentAt: alert.appointmentAt,
+      lineId: alert.lineId,
+      destinationLatitude: alert.destinationLatitude,
+      destinationLongitude: alert.destinationLongitude,
+      latestLatitude: alert.latestLatitude,
+      latestLongitude: alert.latestLongitude,
+      locationConsented: alert.locationConsented,
+      isEnabled: alert.isEnabled,
+      alertedAt: null,
+    },
+  });
+}
+
+export async function updateDepartureAlertLocation(installationId: string, latitude: string, longitude: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Banco de dados indisponível para alertas de saída.");
+  await db.update(departureAlerts).set({ latestLatitude: latitude, latestLongitude: longitude }).where(eq(departureAlerts.installationId, installationId));
+}
+
+export async function disableDepartureAlert(installationId: string) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(departureAlerts).set({ isEnabled: false, locationConsented: false, latestLatitude: null, latestLongitude: null }).where(eq(departureAlerts.installationId, installationId));
+}
+
+export async function getDepartureAlert(installationId: string) {
+  const db = await getDb();
+  if (!db) return null;
+  const records = await db.select().from(departureAlerts).where(eq(departureAlerts.installationId, installationId)).limit(1);
+  return records[0] ?? null;
+}
+
+export async function listEligibleDepartureAlerts(now: Date) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(departureAlerts).where(and(eq(departureAlerts.isEnabled, true), eq(departureAlerts.locationConsented, true), isNull(departureAlerts.alertedAt), gt(departureAlerts.appointmentAt, now)));
+}
+
+export async function markDepartureAlertSent(id: number) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(departureAlerts).set({ alertedAt: new Date() }).where(eq(departureAlerts.id, id));
+}

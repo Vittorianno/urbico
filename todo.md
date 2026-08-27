@@ -14,7 +14,7 @@
 - [x] Persistir dados locais não sensíveis com armazenamento do dispositivo.
 - [x] Criar interfaces de repositório para dados de trânsito e rotas, sem credenciais no cliente.
 - [x] Integrar dados oficiais da SPTrans somente após receber token rotacionado por canal seguro.
-- [ ] Integrar mapa e roteamento somente após receber chaves rotacionadas e restritas por canal seguro.
+- [x] Integrar mapa e roteamento somente após receber chaves rotacionadas e restritas por canal seguro.
 - [x] Implementar a IA remota do Norby no backend após configurar uma credencial segura.
 - [ ] Implementar reconhecimento de voz, síntese remota e notificações de viagem após configurações seguras.
 - [ ] Implementar compartilhamento nativo de viagem e contato de confiança.
@@ -31,3 +31,18 @@
 - [ ] Configurar notificações e identidade de push após o provisionamento seguro do Firebase.
 - [x] Revisar bloqueios de segredos, variáveis de ambiente e rotas de backend antes da publicação.
 - [x] Configurar canal e permissão local de notificações de viagem no dispositivo.
+- [x] Substituir o mapa ilustrativo por Google Maps nativo e interativo.
+- [x] Configurar a chave do Google Maps e Google Places de forma segura para Android e iOS.
+- [x] Exibir no mapa apenas os veículos das linhas relevantes à rota, destino ou próximo compromisso atual.
+- [ ] Implementar autocomplete de endereços do Google Places em rotas e locais favoritos.
+- [x] Incluir ação de envio ou busca visível e confirmação por Enter/Done em todos os campos de texto relevantes.
+- [x] Calcular alertas de saída a partir de compromisso, localização, percurso até a parada e posição do veículo.
+- [x] Implementar captação por voz com detecção de pausa (VAD) e encerramento automático de turno.
+- [ ] Integrar ElevenLabs no backend para síntese e reprodução da resposta falada do Norby.
+- [ ] Validar recursos nativos em dispositivo e conexões de mapa, voz, trânsito e alertas.
+- [ ] Implementar monitoramento contínuo no servidor para alertas de saída escolhidos pelo usuário.
+- [x] Solicitar consentimento explícito, controlar retenção e permitir revogação da localização compartilhada com o servidor.
+- [ ] Preparar o projeto para hospedagem contínua antes de ativar o monitoramento de alertas em produção.
+- [x] Substituir o autocomplete do Google Places por geocodificação e sugestões de endereço do GraphHopper.
+- [x] Substituir a síntese ElevenLabs por voz local do dispositivo enquanto a credencial externa permanecer indisponível.
+- [x] Informar no aplicativo quando a estimativa de alerta depender de localização e dados de veículo ainda não disponíveis.

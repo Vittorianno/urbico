@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 const SPTRANS_BASE_URL = "http://api.olhovivo.sptrans.com.br/v2.1";
 const GRAPHOPPER_BASE_URL = "https://graphhopper.com/api/1";
 const GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta";
+import { readFile } from "node:fs/promises";
 
 describe("credenciais externas protegidas", () => {
   it("autentica o token rotacionado da SPTrans", async () => {
@@ -41,4 +42,27 @@ describe("credenciais externas protegidas", () => {
     const payload = (await response.json()) as { models?: unknown[] };
     expect(Array.isArray(payload.models)).toBe(true);
   }, 15_000);
+
+  it("mantém o GraphHopper como alternativa para sugestões de endereço", async () => {
+    const apiKey = process.env.GRAPHOPPER_API_KEY;
+    const url = new URL(`${GRAPHOPPER_BASE_URL}/geocode`);
+    url.searchParams.set("q", "Avenida Paulista, São Paulo");
+    url.searchParams.set("limit", "5");
+    url.searchParams.set("key", apiKey ?? "");
+    const response = await fetch(url);
+    expect(response.ok).toBe(true);
+    const payload = (await response.json()) as { hits?: unknown[] };
+    expect((payload.hits ?? []).length).toBeGreaterThan(0);
+  }, 15_000);
+
+  it("usa síntese local sem chamar a chave externa indisponível", async () => {
+    const voiceModule = await readFile("./lib/norby-voice.ts", "utf8");
+    expect(voiceModule).toContain('from "expo-speech"');
+    expect(voiceModule).toContain("language: \"pt-BR\"");
+  });
+
+  it("mantém presentes as chaves nativas do Google Maps", () => {
+    expect(process.env.GOOGLE_MAPS_ANDROID_API_KEY, "GOOGLE_MAPS_ANDROID_API_KEY deve estar configurado").toBeTruthy();
+    expect(process.env.GOOGLE_MAPS_IOS_API_KEY, "GOOGLE_MAPS_IOS_API_KEY deve estar configurado").toBeTruthy();
+  });
 });
