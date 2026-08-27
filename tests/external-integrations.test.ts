@@ -1,68 +1,39 @@
+import { readFile } from "node:fs/promises";
+
 import { describe, expect, it } from "vitest";
 
 const SPTRANS_BASE_URL = "http://api.olhovivo.sptrans.com.br/v2.1";
-const GRAPHOPPER_BASE_URL = "https://graphhopper.com/api/1";
-const GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta";
-import { readFile } from "node:fs/promises";
 
-describe("credenciais externas protegidas", () => {
-  it("autentica o token rotacionado da SPTrans", async () => {
+describe("integrações abertas e comerciais", () => {
+  it("autentica o token da fonte pública de dados de trânsito da SPTrans", async () => {
     const token = process.env.SPTRANS_TOKEN;
     expect(token, "SPTRANS_TOKEN deve estar configurado").toBeTruthy();
-
-    const response = await fetch(`${SPTRANS_BASE_URL}/Login/Autenticar?token=${encodeURIComponent(token ?? "")}`, {
-      method: "POST",
-    });
+    const response = await fetch(`${SPTRANS_BASE_URL}/Login/Autenticar?token=${encodeURIComponent(token ?? "")}`, { method: "POST" });
     expect(response.ok).toBe(true);
     await expect(response.json()).resolves.toBe(true);
   }, 15_000);
 
-  it("autoriza uma consulta leve de geocodificação no GraphHopper", async () => {
-    const apiKey = process.env.GRAPHOPPER_API_KEY;
-    expect(apiKey, "GRAPHOPPER_API_KEY deve estar configurado").toBeTruthy();
-
-    const url = new URL(`${GRAPHOPPER_BASE_URL}/geocode`);
-    url.searchParams.set("q", "São Paulo");
-    url.searchParams.set("limit", "1");
-    url.searchParams.set("key", apiKey ?? "");
-    const response = await fetch(url);
-    expect(response.ok).toBe(true);
-    const payload = (await response.json()) as { hits?: unknown[] };
-    expect(Array.isArray(payload.hits)).toBe(true);
-  }, 15_000);
-
-  it("autoriza a listagem de modelos Gemini para o Norby", async () => {
-    const apiKey = process.env.GEMINI_API_KEY;
-    expect(apiKey, "GEMINI_API_KEY deve estar configurado").toBeTruthy();
-
-    const url = new URL(`${GEMINI_BASE_URL}/models`);
-    url.searchParams.set("key", apiKey ?? "");
-    const response = await fetch(url);
-    expect(response.ok).toBe(true);
-    const payload = (await response.json()) as { models?: unknown[] };
-    expect(Array.isArray(payload.models)).toBe(true);
-  }, 15_000);
-
-  it("mantém o GraphHopper como alternativa para sugestões de endereço", async () => {
-    const apiKey = process.env.GRAPHOPPER_API_KEY;
-    const url = new URL(`${GRAPHOPPER_BASE_URL}/geocode`);
-    url.searchParams.set("q", "Avenida Paulista, São Paulo");
-    url.searchParams.set("limit", "5");
-    url.searchParams.set("key", apiKey ?? "");
-    const response = await fetch(url);
-    expect(response.ok).toBe(true);
-    const payload = (await response.json()) as { hits?: unknown[] };
-    expect((payload.hits ?? []).length).toBeGreaterThan(0);
-  }, 15_000);
-
-  it("usa síntese local sem chamar a chave externa indisponível", async () => {
-    const voiceModule = await readFile("./lib/norby-voice.ts", "utf8");
-    expect(voiceModule).toContain('from "expo-speech"');
-    expect(voiceModule).toContain("language: \"pt-BR\"");
+  it("usa MapLibre e o estilo público OpenFreeMap, sem configuração de Google Maps", async () => {
+    const [nativeMap, webMap, config] = await Promise.all([readFile("./components/urbico-map.native.tsx", "utf8"), readFile("./components/urbico-map.web.tsx", "utf8"), readFile("./app.config.ts", "utf8")]);
+    expect(nativeMap).toContain("@maplibre/maplibre-react-native");
+    expect(webMap).toContain("tiles.openfreemap.org/styles/liberty");
+    expect(config).toContain("@maplibre/maplibre-react-native");
+    expect(config).not.toContain("googleMapsApiKey");
+    expect(config).not.toContain("googleMaps:");
   });
 
-  it("mantém presentes as chaves nativas do Google Maps", () => {
-    expect(process.env.GOOGLE_MAPS_ANDROID_API_KEY, "GOOGLE_MAPS_ANDROID_API_KEY deve estar configurado").toBeTruthy();
-    expect(process.env.GOOGLE_MAPS_IOS_API_KEY, "GOOGLE_MAPS_IOS_API_KEY deve estar configurado").toBeTruthy();
+  it("mantém roteamento e autocomplete preparados para instâncias próprias de Pelias e Valhalla", async () => {
+    const geospatial = await readFile("./server/integrations/open-geospatial.ts", "utf8");
+    expect(geospatial).toContain("PELIAS_BASE_URL");
+    expect(geospatial).toContain("VALHALLA_BASE_URL");
+    expect(geospatial).not.toContain("graphhopper.com");
+  });
+
+  it("usa síntese e reconhecimento locais sem chamada à ElevenLabs", async () => {
+    const [voice, norby] = await Promise.all([readFile("./lib/norby-voice.ts", "utf8"), readFile("./server/integrations/norby.ts", "utf8")]);
+    expect(voice).toContain('from "expo-speech"');
+    expect(voice).toContain('language: "pt-BR"');
+    expect(norby).not.toContain("generativelanguage.googleapis.com");
+    expect(norby).toContain("getNorbyReply");
   });
 });

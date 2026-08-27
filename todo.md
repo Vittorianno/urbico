@@ -46,3 +46,9 @@
 - [x] Substituir o autocomplete do Google Places por geocodificação e sugestões de endereço do GraphHopper.
 - [x] Substituir a síntese ElevenLabs por voz local do dispositivo enquanto a credencial externa permanecer indisponível.
 - [x] Informar no aplicativo quando a estimativa de alerta depender de localização e dados de veículo ainda não disponíveis.
+- [x] Auditar todas as APIs e bibliotecas externas por custo, licença e adequação ao uso comercial.
+- [x] Substituir o Google Maps por mapa baseado em OpenStreetMap com licença e atribuição adequadas.
+- [x] Substituir geocodificação e rotas hospedadas por uma alternativa gratuita compatível com o uso comercial.
+- [x] Substituir a voz do Norby por síntese local gratuita e sem dependência comercial externa.
+- [x] Incluir atribuições, limites de uso e documentação das fontes abertas adotadas.
+- [x] Validar que nenhuma credencial de serviço pago seja necessária para o fluxo principal do aplicativo.

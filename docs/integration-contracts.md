@@ -2,53 +2,38 @@
 
 ## SPTrans — Olho Vivo
 
-A autenticação será feita pelo backend usando `POST /Login/Autenticar?token=...` sobre HTTPS. A sessão autenticada será mantida somente dentro da chamada de servidor e nunca será exposta ao aplicativo. As consultas planejadas são `Linha/Buscar`, `Parada/Buscar`, `Parada/BuscarParadasPorLinha`, `Posicao/Linha` e `Previsao/Parada`, sempre traduzidas para os tipos internos do Urbico.
+A autenticação é realizada pelo backend com `POST /Login/Autenticar?token=...` por HTTPS. A sessão autenticada permanece apenas no servidor. As consultas usam `Linha/Buscar`, `Parada/Buscar`, `Parada/BuscarParadasPorLinha`, `Posicao/Linha` e `Previsao/Parada`, sempre traduzidas para tipos internos. A tela de mapa solicita apenas as linhas ativas na rota ou no compromisso atual, evitando exibir toda a frota.
 
-| Origem | Informação do Urbico |
-|---|---|
-| `Linha/Buscar` | Código, letreiro, origem e destino da linha |
-| `Parada/Buscar` | Código, nome, endereço e coordenadas da parada |
-| `Posicao/Linha` | Veículos e coordenadas disponíveis para uma linha |
-| `Previsao/Parada` | Chegadas previstas, veículo e horário de referência |
+## MapLibre e OpenFreeMap
 
-## GraphHopper
+O aplicativo usa **MapLibre React Native** no Android/iOS e **MapLibre GL JS** na web. Ambos recebem o estilo aberto `https://tiles.openfreemap.org/styles/liberty`. A camada de interface inclui veículos, paradas, localização autorizada e geometria de rota como fontes e camadas separadas. A atribuição “© OpenStreetMap contributors · OpenFreeMap” permanece visível.
 
-O backend resolve os endereços pela geocodificação e envia pontos em longitude/latitude a `POST /route`. A chamada de rota utiliza o perfil apropriado, instruções em português e resposta não codificada quando uma geometria precisa ser exibida no mapa. A chave é enviada somente pelo backend.
+## Pelias — autocomplete de endereço
 
-| Entrada do Urbico | Contrato GraphHopper |
-|---|---|
-| Endereço de origem/destino | Geocodificação para coordenadas |
-| Pontos da rota | `POST /route` com ao menos origem e destino |
-| Caminhada | Perfil `foot`, duração, distância e instruções |
+O endpoint interno de sugestões consulta uma instância própria definida em `PELIAS_BASE_URL`. O Urbico envia texto, idioma `pt-BR`, limite de cinco resultados e restrição territorial brasileira. A instância retorna rótulo, endereço e coordenadas; nenhuma chave proprietária é armazenada no aplicativo.
 
-## Google Places
+## Valhalla — roteamento de caminhada
 
-O autocomplete usa `POST /v1/places:autocomplete` com `X-Goog-Api-Key`, entrada do usuário, idioma `pt-BR`, região `br` e um token de sessão gerado pelo cliente. Após a seleção, o backend consulta o detalhe do local pelo identificador retornado, solicitando somente o nome, endereço formatado e coordenadas. O token de sessão não identifica o usuário e não é persistido.
+O backend envia origem e destino ao endpoint `route` da instância em `VALHALLA_BASE_URL`, usando o custo `pedestrian`, quilómetros como unidade, instruções em português e formato `polyline6`. O adaptador converte a geometria para longitude/latitude e normaliza distância, duração e manobras antes de enviar a rota ao aplicativo.
 
-## Norby
+## Norby e voz local
 
-O Norby utiliza a Gemini API exclusivamente pelo backend. O adaptador envia `contents` com a conversa atual e uma instrução de sistema; extrai somente o texto final da primeira resposta candidata. As telas enviam texto ao endpoint interno e recebem apenas uma resposta textual; nenhum token de IA é disponibilizado ao dispositivo.
-
-## Voz, pausa e síntese
-
-A captação por voz usará reconhecimento nativo compatível com Expo. O fluxo trata o evento de fim de fala e a ausência de fala como fim de turno, envia somente a transcrição confirmada ao Norby e encerra o indicador de escuta. A resposta textual é enviada ao endpoint de síntese da ElevenLabs e o dispositivo reproduz apenas a URL de áudio devolvida pelo backend. O segredo da ElevenLabs permanece no servidor.
+Por padrão, o Norby usa respostas locais e determinísticas, sem chamadas a um serviço de IA hospedado. Quando existir uma instância própria de modelo aberto, o backend pode consultar `OLLAMA_BASE_URL` com `OLLAMA_MODEL`; em falha ou ausência de configuração, o fallback local mantém a conversa funcional. A captação reconhece fim de fala e a resposta usa a voz `pt-BR` disponível no sistema por meio do Expo Speech, sem sintetizador remoto.
 
 ## Alerta de saída monitorado
 
-O modo de alerta contínuo depende de consentimento explícito para localização compartilhada. O servidor recebe atualizações autorizadas, calcula a rota até uma parada associada ao compromisso, consulta as posições da linha relevante e avalia uma margem configurável antes de criar o alerta. O app deve permitir pausar ou revogar esse compartilhamento a qualquer momento. A ativação em produção exige hospedagem contínua e um provedor de entrega de push configurado.
+O alerta requer consentimento explícito para localização compartilhada. O servidor cruza a última posição autorizada, a caminhada até a parada, os veículos da linha relevante e o horário do compromisso. A pessoa pode revogar o compartilhamento nas configurações. A execução contínua e o push remoto continuam condicionados à hospedagem persistente e à configuração de entrega de notificações.
 
 ## Referências
 
-[1] [SPTrans — API Olho Vivo: documentação](https://www.sptrans.com.br/desenvolvedores/api-do-olho-vivo-guia-de-referencia/documentacao-api/)
+[1] [SPTrans — Área de Desenvolvedores](https://www.sptrans.com.br/desenvolvedores/)
 
-[2] [GraphHopper — Routing API](https://docs.graphhopper.com/openapi/routing)
+[2] [OpenFreeMap — Quick Start](https://openfreemap.org/quick_start/)
 
-[3] [Google AI for Developers — models.generateContent](https://ai.google.dev/api/generate-content)
+[3] [MapLibre React Native — Setup Expo](https://maplibre.org/maplibre-react-native/docs/setup/expo/)
 
-[4] [expo-speech-recognition — eventos de reconhecimento](https://github.com/jamsch/expo-speech-recognition)
+[4] [Pelias — geocodificador MIT](https://github.com/pelias/pelias)
 
-[5] [ElevenLabs — Create speech](https://elevenlabs.io/docs/api-reference/text-to-speech/convert)
+[5] [Valhalla — referência de rota](https://valhalla.github.io/valhalla/api/route/api-reference/)
 
-[6] [Google Maps Platform — Autocomplete (New)](https://developers.google.com/maps/documentation/places/web-service/place-autocomplete)
-
-[7] [Google Maps Platform — Place Details (New)](https://developers.google.com/maps/documentation/places/web-service/place-details)
+[6] [Expo Speech Recognition](https://github.com/jamsch/expo-speech-recognition)

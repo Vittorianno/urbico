@@ -3,7 +3,7 @@ import { z } from "zod";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, router } from "./_core/trpc";
-import { geocode, planWalkingRoute, suggestAddresses } from "./integrations/graphhopper";
+import { geocode, planWalkingRoute, suggestAddresses } from "./integrations/open-geospatial";
 import { askNorby } from "./integrations/norby";
 import { getLineStops, getLineVehicles, getStopPredictions, searchLines, searchStops } from "./integrations/sptrans";
 import * as db from "./db";

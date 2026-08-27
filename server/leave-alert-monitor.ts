@@ -1,6 +1,6 @@
 import { closestTo, distanceMeters, estimateLeaveAlert } from "../lib/leave-alert";
 import * as db from "./db";
-import { planWalkingRoute } from "./integrations/graphhopper";
+import { planWalkingRoute } from "./integrations/open-geospatial";
 import { getLineStops, getLineVehicles } from "./integrations/sptrans";
 
 const toNumber = (value: string | number | null) => value === null ? null : Number(value);

@@ -1,17 +1,41 @@
-import { Text, View } from "react-native";
+import { useEffect, useRef } from "react";
+import * as maplibregl from "maplibre-gl";
+import type { Map as MapLibreMap } from "maplibre-gl";
+import "maplibre-gl/dist/maplibre-gl.css";
 
-import { colors } from "@/components/urbico-ui";
+import type { UrbicoMapProps } from "./urbico-map.types";
 
-import type { MapCoordinate, MapStop, MapVehicle } from "./urbico-map.native";
+const OPEN_FREE_MAP_STYLE = "https://tiles.openfreemap.org/styles/liberty";
 
-type UrbicoMapProps = {
-  center: MapCoordinate;
-  userLocation: MapCoordinate | null;
-  path: number[][];
-  vehicles: MapVehicle[];
-  stops: MapStop[];
-};
+export function UrbicoMap({ center, userLocation, path, vehicles, stops, onMapPress }: UrbicoMapProps) {
+  const container = useRef<HTMLDivElement | null>(null);
+  const map = useRef<MapLibreMap | null>(null);
+  const pressHandler = useRef(onMapPress);
+  pressHandler.current = onMapPress;
 
-export function UrbicoMap({ vehicles, stops }: UrbicoMapProps) {
-  return <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 28, backgroundColor: "#07111D" }}><Text style={{ color: colors.text, textAlign: "center", fontSize: 16, fontWeight: "700" }}>Mapa Google interativo</Text><Text style={{ color: colors.muted, textAlign: "center", lineHeight: 20, marginTop: 10 }}>A visualização interativa abre na build Android/iOS. O contexto atual possui {vehicles.length} veículo(s) e {stops.length} parada(s) da linha selecionada.</Text></View>;
+  useEffect(() => {
+    if (!container.current || map.current) return;
+    const instance = new maplibregl.Map({ container: container.current, style: OPEN_FREE_MAP_STYLE, center: [center.longitude, center.latitude], zoom: 14.5 });
+    map.current = instance;
+    instance.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
+    instance.on("click", (event) => pressHandler.current?.({ latitude: event.lngLat.lat, longitude: event.lngLat.lng }));
+    instance.on("load", () => {
+      instance.addSource("urbico-context", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+      instance.addLayer({ id: "urbico-route", type: "line", source: "urbico-context", filter: ["==", ["get", "kind"], "route"], paint: { "line-color": "#087DF5", "line-width": 5, "line-opacity": 0.88 } });
+      instance.addLayer({ id: "urbico-stops", type: "circle", source: "urbico-context", filter: ["==", ["get", "kind"], "stop"], paint: { "circle-radius": 6, "circle-color": "#F5A623", "circle-stroke-width": 2, "circle-stroke-color": "#FFFFFF" } });
+      instance.addLayer({ id: "urbico-vehicles", type: "circle", source: "urbico-context", filter: ["==", ["get", "kind"], "vehicle"], paint: { "circle-radius": 9, "circle-color": "#087DF5", "circle-stroke-width": 2, "circle-stroke-color": "#FFFFFF" } });
+      instance.addLayer({ id: "urbico-user", type: "circle", source: "urbico-context", filter: ["==", ["get", "kind"], "user"], paint: { "circle-radius": 7, "circle-color": "#12C2E9", "circle-stroke-width": 3, "circle-stroke-color": "#FFFFFF" } });
+    });
+    return () => { instance.remove(); map.current = null; };
+  }, [center.latitude, center.longitude]);
+
+  useEffect(() => {
+    const instance = map.current;
+    if (!instance) return;
+    const features = [...(path.length > 1 ? [{ type: "Feature", properties: { kind: "route" }, geometry: { type: "LineString", coordinates: path.map(([longitude, latitude]) => [longitude, latitude]) } }] : []), ...(userLocation ? [{ type: "Feature", properties: { kind: "user" }, geometry: { type: "Point", coordinates: [userLocation.longitude, userLocation.latitude] } }] : []), ...stops.map((stop) => ({ type: "Feature", properties: { kind: "stop" }, geometry: { type: "Point", coordinates: [stop.longitude, stop.latitude] } })), ...vehicles.map((vehicle) => ({ type: "Feature", properties: { kind: "vehicle" }, geometry: { type: "Point", coordinates: [vehicle.longitude, vehicle.latitude] } }))];
+    const update = () => { const source = instance.getSource("urbico-context") as maplibregl.GeoJSONSource | undefined; source?.setData({ type: "FeatureCollection", features } as GeoJSON.FeatureCollection); };
+    if (instance.isStyleLoaded()) update(); else instance.once("load", update);
+  }, [path, stops, userLocation, vehicles]);
+
+  return <div ref={container} aria-label="Mapa interativo baseado em OpenStreetMap" style={{ flex: 1, minHeight: 280, width: "100%" }} />;
 }

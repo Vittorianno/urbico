@@ -50,9 +50,6 @@ const config: ExpoConfig = {
   ios: {
     supportsTablet: true,
     bundleIdentifier: env.iosBundleId,
-    config: {
-      googleMapsApiKey: process.env.GOOGLE_MAPS_IOS_API_KEY ?? "",
-    },
     "infoPlist": {
       "ITSAppUsesNonExemptEncryption": false
     }
@@ -67,11 +64,6 @@ const config: ExpoConfig = {
     edgeToEdgeEnabled: true,
     predictiveBackGestureEnabled: false,
     package: env.androidPackage,
-    config: {
-      googleMaps: {
-        apiKey: process.env.GOOGLE_MAPS_ANDROID_API_KEY ?? "",
-      },
-    },
     permissions: ["POST_NOTIFICATIONS", "ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION", "ACCESS_BACKGROUND_LOCATION", "FOREGROUND_SERVICE", "FOREGROUND_SERVICE_LOCATION"],
     intentFilters: [
       {
@@ -94,6 +86,7 @@ const config: ExpoConfig = {
   },
   plugins: [
     "expo-router",
+    "@maplibre/maplibre-react-native",
     [
       "expo-location",
       {
