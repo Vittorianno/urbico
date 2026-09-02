@@ -1,7 +1,7 @@
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { router } from "expo-router";
 import { useState } from "react";
-import { FlatList, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Alert, FlatList, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { AddressAutocomplete, type AddressSuggestion } from "@/components/address-autocomplete";
 import { ScreenContainer } from "@/components/screen-container";
@@ -19,13 +19,22 @@ export default function RoutesScreen() {
   const ready = origin.trim().length > 1 && destination.trim().length > 1;
   const routeMutation = trpc.routing.planWalking.useMutation();
   const lineSearch = trpc.transit.searchLines.useQuery({ term: destination.trim() }, { enabled: destination.trim().length >= 2 });
+  const routingStatus = trpc.routing.status.useQuery();
   const plannedRoute = routeMutation.data?.route;
   const walkingMinutes = plannedRoute ? Math.max(1, Math.ceil(plannedRoute.durationSeconds / 60)) : null;
   const start = async () => {
     if (!ready) return;
     try {
       const result = await routeMutation.mutateAsync({ origin, destination });
-      if (!result?.route) return;
+      if (!result?.route) {
+        Alert.alert(
+          "Rota automática indisponível",
+          routingStatus.data?.geocodingAvailable
+            ? "O serviço de rotas ainda não está configurado. Você pode continuar usando endereços e coordenadas manuais."
+            : "A busca automática de endereços está indisponível. Confirme os endereços manualmente ou configure um serviço Pelias/Valhalla.",
+        );
+        return;
+      }
       setActiveRoute({
         origin: result.origin,
         destination: result.destination,
@@ -49,7 +58,7 @@ export default function RoutesScreen() {
         {lineSearch.data?.length ? <View style={styles.lineResults}><Text style={styles.resultLabel}>Linha para acompanhar no mapa</Text><FlatList data={lineSearch.data.slice(0, 3)} scrollEnabled={false} keyExtractor={(item) => String(item.id)} renderItem={({ item }) => <Pressable onPress={() => setSelectedLine(item)} style={({ pressed }) => [styles.lineResult, selectedLine?.id === item.id && styles.lineSelected, pressed && styles.pressed]}><MaterialIcons name="directions-bus" size={18} color={colors.blue} /><View style={{ flex: 1 }}><Text style={styles.lineName}>{item.label} · {item.destination}</Text><Text style={styles.lineMeta}>{item.origin}</Text></View>{selectedLine?.id === item.id ? <MaterialIcons name="check-circle" size={19} color={colors.cyan} /> : null}</Pressable>} /></View> : null}
         <View style={styles.modeRow}><View style={styles.modeActive}><MaterialIcons name="directions-bus" size={20} color={colors.blue} /></View><View style={styles.mode}><MaterialIcons name="directions-car" size={20} color={colors.muted} /></View><View style={styles.mode}><MaterialIcons name="directions-walk" size={20} color={colors.muted} /></View></View>
         <SectionTitle title="Opções" />
-        <View style={[styles.routeCard, styles.bestRoute]}><View style={styles.routeHeader}><Text style={styles.routeCardTitle}>{plannedRoute ? "Melhor rota a pé" : "Melhor rota"}</Text><Text style={styles.routeCardTime}>{routeMutation.isPending ? "Calculando" : walkingMinutes ? `${walkingMinutes} min` : "Aguardando"}</Text></View><Text style={styles.routeCardText}>{plannedRoute ? `${Math.round(plannedRoute.distanceMeters)} m · ${plannedRoute.instructions.length} instruções para chegar ao destino.` : routeMutation.error ? "Não foi possível calcular esta rota. Revise os endereços e tente novamente." : ready ? "A origem e o destino estão prontos para consulta segura no serviço de rotas." : "Informe origem e destino para organizar caminhada, ônibus e conexões."}</Text><View style={styles.steps}><Step icon="directions-walk" label="Caminhada" /><View style={styles.stepLine} /><Step icon="directions-bus" label="Transporte" /><View style={styles.stepLine} /><Step icon="directions-walk" label="Chegada" /></View></View>
+        <View style={[styles.routeCard, styles.bestRoute]}><View style={styles.routeHeader}><Text style={styles.routeCardTitle}>{plannedRoute ? "Melhor rota a pé" : "Melhor rota"}</Text><Text style={styles.routeCardTime}>{routeMutation.isPending ? "Calculando" : walkingMinutes ? `${walkingMinutes} min` : "Aguardando"}</Text></View><Text style={styles.routeCardText}>{plannedRoute ? `${Math.round(plannedRoute.distanceMeters)} m · ${plannedRoute.instructions.length} instruções para chegar ao destino.` : routeMutation.error ? "Não foi possível calcular esta rota. Revise os endereços e tente novamente." : ready && routingStatus.data && !routingStatus.data.routingAvailable ? "Rota automática indisponível neste protótipo. Digite os endereços manualmente; o acompanhamento SPTrans continua disponível quando uma linha for selecionada." : ready ? "A origem e o destino estão prontos para consulta segura no serviço de rotas." : "Informe origem e destino para organizar caminhada, ônibus e conexões."}</Text><View style={styles.steps}><Step icon="directions-walk" label="Caminhada" /><View style={styles.stepLine} /><Step icon="directions-bus" label="Transporte" /><View style={styles.stepLine} /><Step icon="directions-walk" label="Chegada" /></View></View>
         <View style={styles.routeCard}><Text style={styles.routeCardTitle}>Alternativa 1</Text><Text style={styles.routeCardText}>Rotas alternativas serão exibidas após a disponibilidade de tráfego e transporte.</Text></View>
         <View style={styles.leaveNow}><MaterialIcons name="schedule" size={19} color={colors.muted} /><Text style={styles.leaveText}>{selectedLine ? `A linha ${selectedLine.label} será a única exibida no mapa desta rota.` : "Selecione uma linha sugerida para acompanhar apenas veículos relevantes no mapa."}</Text></View>
         <PrimaryButton label={routeMutation.isPending ? "CALCULANDO ROTA" : plannedRoute ? "INICIAR VIAGEM" : "CALCULAR ROTA"} icon={routeMutation.isPending ? "hourglass-top" : "play-arrow"} disabled={!ready || routeMutation.isPending} onPress={() => void start()} style={styles.start} />

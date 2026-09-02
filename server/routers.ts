@@ -41,6 +41,10 @@ export const appRouter = router({
     })),
   }),
   routing: router({
+    status: publicProcedure.query(() => ({
+      geocodingAvailable: Boolean(process.env.PELIAS_BASE_URL?.trim()),
+      routingAvailable: Boolean(process.env.VALHALLA_BASE_URL?.trim()),
+    })),
     geocode: publicProcedure.input(z.object({ query: z.string().trim().min(2).max(160) })).query(({ input }) => safeIntegration(() => geocode(input.query))),
     suggestAddresses: publicProcedure.input(z.object({ query: z.string().trim().min(2).max(160) })).query(({ input }) => safeIntegration(() => suggestAddresses(input.query))),
     planWalking: publicProcedure.input(z.object({ origin: z.string().trim().min(2).max(160), destination: z.string().trim().min(2).max(160) })).mutation(async ({ input }) => safeIntegration(async () => {

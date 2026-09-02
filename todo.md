@@ -52,3 +52,8 @@
 - [x] Substituir a voz do Norby por síntese local gratuita e sem dependência comercial externa.
 - [x] Incluir atribuições, limites de uso e documentação das fontes abertas adotadas.
 - [x] Validar que nenhuma credencial de serviço pago seja necessária para o fluxo principal do aplicativo.
+
+- [x] Adicionar fallback manual de endereço quando Pelias não estiver configurado.
+- [x] Exibir estado indisponível e instruções claras quando Valhalla não estiver configurado.
+- [x] Preservar o alerta de saída usando coordenadas manuais e dados SPTrans quando disponíveis.
+- [x] Executar validação final do fluxo sem custo e salvar checkpoint estável.

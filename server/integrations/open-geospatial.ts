@@ -4,8 +4,7 @@ export type WalkingRoute = { distanceMeters: number; durationSeconds: number; po
 
 function serviceUrl(variable: "PELIAS_BASE_URL" | "VALHALLA_BASE_URL") {
   const value = process.env[variable]?.trim();
-  if (!value) throw new Error(`${variable} não foi configurado.`);
-  return value.replace(/\/$/, "");
+  return value ? value.replace(/\/$/, "") : null;
 }
 
 type PeliasFeature = { geometry?: { coordinates?: [number, number] }; properties?: { label?: string; name?: string } };
@@ -19,7 +18,9 @@ function mapPeliasFeature(feature: PeliasFeature, fallback: string): GeocodedPla
 }
 
 export async function suggestAddresses(query: string): Promise<GeocodedPlace[]> {
-  const url = new URL(`${serviceUrl("PELIAS_BASE_URL")}/v1/autocomplete`);
+  const baseUrl = serviceUrl("PELIAS_BASE_URL");
+  if (!baseUrl || query.trim().length < 2) return [];
+  const url = new URL(`${baseUrl}/v1/autocomplete`);
   url.searchParams.set("text", query);
   url.searchParams.set("lang", "pt-BR");
   url.searchParams.set("boundary.country", "BR");
@@ -59,7 +60,9 @@ export function decodeValhallaShape(shape: string, precision = 6): number[][] {
 type ValhallaRoute = { trip?: { summary?: { length?: number; time?: number }; legs?: Array<{ shape?: string; maneuvers?: Array<{ instruction?: string; length?: number; time?: number }> }> } };
 
 export async function planWalkingRoute(origin: Coordinates, destination: Coordinates): Promise<WalkingRoute | null> {
-  const url = new URL(`${serviceUrl("VALHALLA_BASE_URL")}/route`);
+  const baseUrl = serviceUrl("VALHALLA_BASE_URL");
+  if (!baseUrl) return null;
+  const url = new URL(`${baseUrl}/route`);
   url.searchParams.set("json", JSON.stringify({ locations: [{ lat: origin.latitude, lon: origin.longitude }, { lat: destination.latitude, lon: destination.longitude }], costing: "pedestrian", units: "kilometers", language: "pt-BR", shape_format: "polyline6" }));
   const response = await fetch(url);
   if (!response.ok) throw new Error("O roteador aberto não respondeu.");
