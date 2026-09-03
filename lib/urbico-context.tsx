@@ -106,7 +106,14 @@ export function UrbicoProvider({ children }: { children: ReactNode }) {
         const parsed = JSON.parse(stored) as Partial<Omit<UrbicoState, "addFavorite" | "removeFavorite" | "addAppointment" | "removeAppointment" | "sendMessage" | "addNorbyMessage" | "addCrowdReport" | "startTrip" | "endTrip" | "setNotificationsEnabled" | "setVoiceEnabled" | "setActiveRoute" | "setCurrentLocation" | "setLocationSharingEnabled">>;
         if (parsed.favorites) setFavorites(parsed.favorites);
         if (parsed.appointments) setAppointments(parsed.appointments);
-        if (parsed.messages) setMessages(parsed.messages);
+        if (parsed.messages) {
+          const storedMessages = parsed.messages;
+          setMessages((current) => {
+            const merged = new Map(storedMessages.map((message) => [message.id, message]));
+            current.forEach((message) => merged.set(message.id, message));
+            return Array.from(merged.values());
+          });
+        }
         if (parsed.crowdReports) setCrowdReports(parsed.crowdReports);
         if (parsed.tripHistory) setTripHistory(parsed.tripHistory);
         if (typeof parsed.isTripActive === "boolean") setIsTripActive(parsed.isTripActive);

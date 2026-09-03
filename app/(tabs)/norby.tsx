@@ -45,6 +45,7 @@ export default function NorbyScreen() {
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const transcriptRef = useRef("");
   const completedTurnRef = useRef(false);
+  const listeningRef = useRef(false);
   const chatMutation = trpc.norby.chat.useMutation();
 
   const askNorby = async (question: string) => {
@@ -67,6 +68,7 @@ export default function NorbyScreen() {
     if (completedTurnRef.current) return;
     const finalText = (spokenText ?? transcriptRef.current).trim();
     setIsListening(false);
+    listeningRef.current = false;
     if (!finalText) return;
     completedTurnRef.current = true;
     transcriptRef.current = "";
@@ -82,7 +84,11 @@ export default function NorbyScreen() {
     if (event.isFinal) finishVoiceTurn(candidate);
   });
   useSpeechRecognitionEvent("speechend", () => finishVoiceTurn());
-  useSpeechRecognitionEvent("end", () => { setIsListening(false); finishVoiceTurn(); });
+  useSpeechRecognitionEvent("end", () => {
+    if (!listeningRef.current) return;
+    setIsListening(false);
+    finishVoiceTurn();
+  });
   useSpeechRecognitionEvent("error", (event) => {
     setIsListening(false);
     if (event.error !== "aborted") setVoiceError(event.error === "no-speech" ? "Não detectei fala. Tente novamente." : "A escuta não pôde ser concluída. Tente novamente.");
@@ -104,6 +110,7 @@ export default function NorbyScreen() {
     setVoiceError(null);
     setShowConversation(true);
     setIsListening(true);
+    listeningRef.current = true;
     ExpoSpeechRecognitionModule.start({
       lang: "pt-BR",
       interimResults: true,
@@ -118,6 +125,7 @@ export default function NorbyScreen() {
   const stopVoiceTurn = () => {
     ExpoSpeechRecognitionModule.stop();
     setIsListening(false);
+    listeningRef.current = false;
   };
 
   const showAbout = () => Alert.alert("Sobre o Norby", "Seu assistente de mobilidade para consultar linhas, organizar rotas e acompanhar decisões de viagem.");
@@ -238,7 +246,7 @@ const styles = StyleSheet.create({
   outlineText: { color: colors.blue, fontSize: 11, fontWeight: "700" },
   primaryAction: { flex: 1.15, minHeight: 46, borderRadius: 18, backgroundColor: colors.blue, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 5, paddingHorizontal: 5 },
   primaryText: { color: "#FFFFFF", fontSize: 11, fontWeight: "800" },
-  composer: { minHeight: 72, paddingHorizontal: 12, paddingVertical: 10, flexDirection: "row", alignItems: "center", gap: 7, borderTopWidth: 1, borderColor: colors.border, backgroundColor: colors.background },
+  composer: { minHeight: 72, paddingHorizontal: 12, paddingVertical: 10, flexDirection: "row", alignItems: "center", gap: 7, borderTopWidth: 1, borderColor: colors.border, backgroundColor: colors.background, zIndex: 10, elevation: 10 },
   addButton: { width: 43, height: 43, borderRadius: 22, borderWidth: 2, borderColor: colors.blue, alignItems: "center", justifyContent: "center" },
   composerInput: { flex: 1, minHeight: 46, borderRadius: 23, backgroundColor: colors.card, color: colors.text, paddingHorizontal: 16, fontSize: 15, borderWidth: 1, borderColor: colors.border },
   composerMic: { width: 43, height: 43, borderRadius: 22, backgroundColor: colors.blueSoft, alignItems: "center", justifyContent: "center" },
