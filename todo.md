@@ -57,3 +57,8 @@
 - [x] Exibir estado indisponível e instruções claras quando Valhalla não estiver configurado.
 - [x] Preservar o alerta de saída usando coordenadas manuais e dados SPTrans quando disponíveis.
 - [x] Executar validação final do fluxo sem custo e salvar checkpoint estável.
+
+- [x] Reestruturar o chat Norby conforme a referência visual enviada, com balões, avatar e cartão de rota.
+- [x] Exibir ícones reais na navegação, no campo de mensagem e nas ações do cartão de rota.
+- [x] Corrigir áreas clicáveis sem resposta e garantir confirmação por teclado no chat.
+- [x] Validar visualmente o Norby em viewport móvel e salvar checkpoint da atualização.

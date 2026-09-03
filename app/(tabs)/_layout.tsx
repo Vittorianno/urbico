@@ -2,9 +2,14 @@ import { Tabs } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { HapticTab } from "@/components/haptic-tab";
-import { IconSymbol } from "@/components/ui/icon-symbol";
-import { Platform } from "react-native";
+import { Platform, Text } from "react-native";
 import { useColors } from "@/hooks/use-colors";
+
+const tabGlyphs = { home: "⌂", map: "▣", norby: "◉", profile: "●" } as const;
+
+function TabIcon({ name, color }: { name: keyof typeof tabGlyphs; color: string }) {
+  return <Text style={{ color, fontSize: name === "norby" ? 22 : 24, lineHeight: 27, fontWeight: "800" }}>{tabGlyphs[name]}</Text>;
+}
 
 export default function TabLayout() {
   const colors = useColors();
@@ -16,6 +21,7 @@ export default function TabLayout() {
     <Tabs
       screenOptions={{
         tabBarActiveTintColor: colors.tint,
+        tabBarInactiveTintColor: colors.muted,
         headerShown: false,
         tabBarButton: HapticTab,
         tabBarStyle: {
@@ -32,20 +38,20 @@ export default function TabLayout() {
         name="index"
         options={{
           title: "Início",
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="house.fill" color={color} />,
+          tabBarIcon: ({ color }) => <TabIcon name="home" color={color} />,
         }}
       />
       <Tabs.Screen
         name="map"
-        options={{ title: "Mapa", tabBarIcon: ({ color }) => <IconSymbol size={25} name="map.fill" color={color} /> }}
+        options={{ title: "Mapa", tabBarIcon: ({ color }) => <TabIcon name="map" color={color} /> }}
       />
       <Tabs.Screen
         name="norby"
-        options={{ title: "Norby", tabBarIcon: ({ color }) => <IconSymbol size={25} name="message.fill" color={color} /> }}
+        options={{ title: "Norby", tabBarIcon: ({ color }) => <TabIcon name="norby" color={color} /> }}
       />
       <Tabs.Screen
         name="profile"
-        options={{ title: "Perfil", tabBarIcon: ({ color }) => <IconSymbol size={26} name="person.crop.circle" color={color} /> }}
+        options={{ title: "Perfil", tabBarIcon: ({ color }) => <TabIcon name="profile" color={color} /> }}
       />
       <Tabs.Screen name="routes" options={{ href: null }} />
       <Tabs.Screen name="agenda" options={{ href: null }} />
