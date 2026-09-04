@@ -108,10 +108,19 @@ export async function upsertDepartureAlert(alert: InsertDepartureAlert) {
   });
 }
 
+// FIX: antes só gravava a localização e não devolvia nada. Como nenhuma tela
+// do app nunca consultava `departureAlerts.state` separadamente, o cliente
+// jamais descobria quando o servidor marcava alertedAt — o alerta calculado
+// nunca chegava a notificar ninguém. Agora devolve o registro atualizado, que
+// o router repassa na própria resposta de updateLocation (já chamada
+// periodicamente em segundo plano), permitindo ao app notificar localmente
+// assim que alertedAt aparecer, sem round-trip extra.
 export async function updateDepartureAlertLocation(installationId: string, latitude: string, longitude: string) {
   const db = await getDb();
   if (!db) throw new Error("Banco de dados indisponível para alertas de saída.");
   await db.update(departureAlerts).set({ latestLatitude: latitude, latestLongitude: longitude }).where(eq(departureAlerts.installationId, installationId));
+  const records = await db.select().from(departureAlerts).where(eq(departureAlerts.installationId, installationId)).limit(1);
+  return records[0] ?? null;
 }
 
 export async function disableDepartureAlert(installationId: string) {
