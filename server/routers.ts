@@ -62,9 +62,21 @@ export const appRouter = router({
       await db.upsertDepartureAlert({ ...input, destinationLatitude: String(input.destinationLatitude), destinationLongitude: String(input.destinationLongitude), latestLatitude: String(input.latitude), latestLongitude: String(input.longitude), isEnabled: true });
       return { armed: true };
     }),
+    // FIX: antes devolvia só `{ updated: true }`. Como nenhuma tela do app
+    // consultava `departureAlerts.state` separadamente, o cliente jamais
+    // descobria quando o servidor decidia "hora de sair" — o alerta era
+    // calculado, mas nunca chegava ao usuário. Esta é a única chamada de rede
+    // feita periodicamente enquanto o alerta está armado (a cada atualização
+    // de localização em segundo plano), então devolver o estado do alerta
+    // aqui é o que permite ao app notificar localmente assim que o servidor
+    // marcar alertedAt.
     updateLocation: publicProcedure.input(z.object({ installationId: z.string().uuid(), latitude: z.number().min(-90).max(90), longitude: z.number().min(-180).max(180) })).mutation(async ({ input }) => {
-      await db.updateDepartureAlertLocation(input.installationId, String(input.latitude), String(input.longitude));
-      return { updated: true };
+      const alert = await db.updateDepartureAlertLocation(input.installationId, String(input.latitude), String(input.longitude));
+      return {
+        updated: true,
+        alertedAt: alert?.alertedAt?.toISOString() ?? null,
+        appointmentLabel: alert?.appointmentLabel ?? null,
+      };
     }),
     revoke: publicProcedure.input(z.object({ installationId: z.string().uuid() })).mutation(async ({ input }) => {
       await db.disableDepartureAlert(input.installationId);
@@ -72,7 +84,7 @@ export const appRouter = router({
     }),
     state: publicProcedure.input(z.object({ installationId: z.string().uuid() })).query(async ({ input }) => {
       const alert = await db.getDepartureAlert(input.installationId);
-      return alert ? { armed: alert.isEnabled && alert.locationConsented, alertedAt: alert.alertedAt?.toISOString() ?? null } : { armed: false, alertedAt: null };
+      return alert ? { armed: alert.isEnabled && alert.locationConsented, alertedAt: alert.alertedAt?.toISOString() ?? null, appointmentLabel: alert.appointmentLabel } : { armed: false, alertedAt: null, appointmentLabel: null };
     }),
   }),
 });
