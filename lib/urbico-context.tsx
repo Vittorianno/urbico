@@ -35,6 +35,12 @@ export type ChatMessage = {
   id: string;
   role: "assistant" | "user";
   content: string;
+  // FIX: antes não existia este campo, e a tela do Norby calculava o horário
+  // exibido com `new Date()` a cada renderização — ou seja, toda mensagem
+  // (inclusive as antigas) sempre mostrava a hora atual, e o horário mudava
+  // sozinho a cada novo render. Agora o horário real de criação é gravado uma
+  // única vez, junto com a mensagem.
+  createdAt: number;
 };
 
 export type TripRecord = {
@@ -72,11 +78,23 @@ type UrbicoState = {
 
 const STORAGE_KEY = "urbico.local-state.v1";
 
+// FIX: gerador de id com contador monotônico para evitar colisões quando duas
+// mensagens (ex.: a pergunta do usuário e a resposta do Norby) são criadas no
+// mesmo milissegundo — `Date.now()` sozinho podia gerar o mesmo id duas vezes,
+// o que fazia uma mensagem sobrescrever silenciosamente a outra no Map usado
+// para mesclar com o armazenamento local.
+let messageIdCounter = 0;
+function nextMessageId(prefix: string) {
+  messageIdCounter += 1;
+  return `${prefix}-${Date.now()}-${messageIdCounter}`;
+}
+
 const initialMessages: ChatMessage[] = [
   {
     id: "norby-welcome",
     role: "assistant",
     content: "Olá, sou o Norby. Diga para onde vamos e eu organizo sua próxima decisão.",
+    createdAt: Date.now(),
   },
 ];
 
@@ -107,7 +125,13 @@ export function UrbicoProvider({ children }: { children: ReactNode }) {
         if (parsed.favorites) setFavorites(parsed.favorites);
         if (parsed.appointments) setAppointments(parsed.appointments);
         if (parsed.messages) {
-          const storedMessages = parsed.messages;
+          // FIX: mensagens salvas antes desta correção não têm `createdAt`.
+          // Preenche com Date.now() como aproximação só na migração, para não
+          // quebrar a tela do Norby ao ler dados antigos do AsyncStorage.
+          const storedMessages = parsed.messages.map((message) => ({
+            ...message,
+            createdAt: (message as Partial<ChatMessage>).createdAt ?? Date.now(),
+          }));
           setMessages((current) => {
             const merged = new Map(storedMessages.map((message) => [message.id, message]));
             current.forEach((message) => merged.set(message.id, message));
@@ -157,13 +181,13 @@ export function UrbicoProvider({ children }: { children: ReactNode }) {
         if (!trimmed) return;
         setMessages((current) => [
           ...current,
-          { id: `user-${Date.now()}`, role: "user", content: trimmed },
+          { id: nextMessageId("user"), role: "user", content: trimmed, createdAt: Date.now() },
         ]);
       },
       addNorbyMessage: (text) => {
         const trimmed = text.trim();
         if (!trimmed) return;
-        setMessages((current) => [...current, { id: `norby-${Date.now()}`, role: "assistant", content: trimmed }]);
+        setMessages((current) => [...current, { id: nextMessageId("norby"), role: "assistant", content: trimmed, createdAt: Date.now() }]);
       },
       addCrowdReport: (level) => setCrowdReports((current) => [...current, level]),
       startTrip: () => setIsTripActive(true),
