@@ -20,7 +20,11 @@ export default function HomeScreen() {
             <Text style={styles.brand}>Urbi<Text style={styles.brandAccent}>co</Text></Text>
             <Text style={styles.tagline}>Mobilidade inteligente para o seu dia.</Text>
           </View>
-          <Pressable accessibilityLabel="Abrir configurações" onPress={() => router.push("/profile")} style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}>
+          {/* FIX: o rótulo de acessibilidade e o ícone de sino prometiam abrir
+              as configurações, mas o toque levava para /profile (a mesma tela
+              já acessível pelo botão de menu à esquerda). Agora leva
+              corretamente para /settings. */}
+          <Pressable accessibilityLabel="Abrir configurações" onPress={() => router.push("/settings")} style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}>
             <MaterialIcons name="notifications-none" size={22} color={colors.text} />
             <View style={styles.notificationDot} />
           </Pressable>
