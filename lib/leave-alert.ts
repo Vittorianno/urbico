@@ -16,19 +16,43 @@ export function closestTo<T extends Coordinate>(origin: Coordinate, candidates: 
   }, null);
 }
 
-export function estimateLeaveAlert(input: { now: Date; appointmentAt: Date; walkingSeconds: number; vehicleDistanceMeters: number | null; averageBusSpeedKmh?: number; transferBufferSeconds?: number }) {
+export function estimateLeaveAlert(input: {
+  now: Date;
+  appointmentAt: Date;
+  /** Caminhada da localização atual até o ponto de embarque. */
+  walkingSeconds: number;
+  /** Distância entre o ponto de embarque e o veículo mais próximo da linha (tempo de espera pelo ônibus). */
+  vehicleDistanceMeters: number | null;
+  /**
+   * Duração estimada do trecho dentro do ônibus, do ponto de embarque até o ponto de
+   * desembarque mais próximo do destino. Sem essa informação o alerta ignoraria por
+   * completo o tempo de viagem no veículo, o que faria o horário de saída calculado
+   * ficar sistematicamente atrasado em relação ao compromisso real.
+   */
+  busRideSeconds?: number | null;
+  /** Caminhada do ponto de desembarque até o endereço de destino do compromisso. */
+  finalWalkingSeconds?: number | null;
+  averageBusSpeedKmh?: number;
+  transferBufferSeconds?: number;
+}) {
   const averageBusSpeedKmh = input.averageBusSpeedKmh ?? 18;
   const transferBufferSeconds = input.transferBufferSeconds ?? 300;
-  const vehicleSeconds = input.vehicleDistanceMeters === null ? 0 : Math.round((input.vehicleDistanceMeters / (averageBusSpeedKmh * 1000)) * 3600);
-  const estimatedTravelSeconds = Math.max(0, input.walkingSeconds) + vehicleSeconds + transferBufferSeconds;
+  const waitForVehicleSeconds = input.vehicleDistanceMeters === null ? 0 : Math.round((input.vehicleDistanceMeters / (averageBusSpeedKmh * 1000)) * 3600);
+  const busRideSeconds = Math.max(0, input.busRideSeconds ?? 0);
+  const finalWalkingSeconds = Math.max(0, input.finalWalkingSeconds ?? 0);
+  const estimatedTravelSeconds =
+    Math.max(0, input.walkingSeconds) + waitForVehicleSeconds + busRideSeconds + finalWalkingSeconds + transferBufferSeconds;
   const leaveBy = new Date(input.appointmentAt.getTime() - estimatedTravelSeconds * 1000);
   const secondsUntilLeave = Math.round((leaveBy.getTime() - input.now.getTime()) / 1000);
+  const hasFullRouteData = input.vehicleDistanceMeters !== null && input.busRideSeconds != null && input.finalWalkingSeconds != null;
   return {
     shouldLeave: secondsUntilLeave <= 0,
     leaveBy,
     secondsUntilLeave,
     estimatedTravelSeconds,
-    vehicleSeconds,
-    confidence: input.vehicleDistanceMeters === null ? "limitada" as const : "estimada" as const,
+    vehicleSeconds: waitForVehicleSeconds,
+    busRideSeconds,
+    finalWalkingSeconds,
+    confidence: hasFullRouteData ? ("estimada" as const) : ("limitada" as const),
   };
 }
