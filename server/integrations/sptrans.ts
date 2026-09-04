@@ -55,17 +55,50 @@ function mapStop(raw: RawStop): TransitStop {
   return { id: raw.cp, name: raw.np, address: raw.ed, latitude: raw.py, longitude: raw.px };
 }
 
-async function authenticatedRequest<T>(path: string): Promise<T> {
+// FIX: a API Olho Vivo mantém a sessão autenticada por alguns minutos. O código
+// original chamava /Login/Autenticar em TODA requisição, o que desperdiça
+// latência e arrisca estourar o limite de autenticações da fonte oficial sob
+// uso real. Agora a sessão é cacheada e reaproveitada até perto de expirar,
+// com reautenticação automática em caso de expiração (401/403) e proteção
+// contra autenticações concorrentes (várias chamadas simultâneas não disparam
+// vários logins).
+const SESSION_TTL_MS = 3 * 60 * 1000;
+let cachedSession: { cookie: string; expiresAt: number } | null = null;
+let pendingAuthentication: Promise<string> | null = null;
+
+async function authenticate(): Promise<string> {
   const token = getToken();
   const login = await fetch(`${SPTRANS_BASE_URL}/Login/Autenticar?token=${encodeURIComponent(token)}`, { method: "POST" });
   if (!login.ok || (await login.json().catch(() => false)) !== true) {
     throw new Error("Não foi possível autenticar na fonte de transporte.");
   }
-
   const sessionCookie = login.headers.get("set-cookie")?.split(";")[0];
+  if (!sessionCookie) throw new Error("A fonte de transporte não retornou uma sessão válida.");
+  cachedSession = { cookie: sessionCookie, expiresAt: Date.now() + SESSION_TTL_MS };
+  return sessionCookie;
+}
+
+async function getSessionCookie(forceRefresh = false): Promise<string> {
+  if (!forceRefresh && cachedSession && cachedSession.expiresAt > Date.now()) {
+    return cachedSession.cookie;
+  }
+  if (!pendingAuthentication) {
+    pendingAuthentication = authenticate().finally(() => {
+      pendingAuthentication = null;
+    });
+  }
+  return pendingAuthentication;
+}
+
+async function authenticatedRequest<T>(path: string, isRetry = false): Promise<T> {
+  const sessionCookie = await getSessionCookie(isRetry);
   const response = await fetch(`${SPTRANS_BASE_URL}${path}`, {
-    headers: sessionCookie ? { cookie: sessionCookie } : undefined,
+    headers: { cookie: sessionCookie },
   });
+  // Sessão expirada no servidor antes do previsto: reautentica uma vez e tenta de novo.
+  if ((response.status === 401 || response.status === 403) && !isRetry) {
+    return authenticatedRequest<T>(path, true);
+  }
   if (!response.ok) throw new Error("A fonte de transporte não respondeu à consulta.");
   return (await response.json()) as T;
 }
