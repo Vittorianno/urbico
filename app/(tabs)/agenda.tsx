@@ -8,6 +8,7 @@ import { colors, PrimaryButton } from "@/components/urbico-ui";
 import { useUrbico } from "@/lib/urbico-context";
 import { getInstallationId, startDepartureLocationUpdates } from "@/lib/departure-location-task";
 import { getCurrentUrbicoLocation } from "@/lib/location-service";
+import { enableTravelNotifications } from "@/lib/notifications";
 import { trpc } from "@/lib/trpc";
 
 export default function AgendaScreen() {
@@ -21,10 +22,22 @@ export default function AgendaScreen() {
     if (Number.isNaN(appointmentAt.getTime())) { Alert.alert("Formato de data", "Use data no formato AAAA-MM-DD e hora no formato HH:MM para ativar o alerta."); return; }
     try {
       const [installationId, current] = await Promise.all([getInstallationId(), getCurrentUrbicoLocation()]);
+      // FIX: sem isto, o app nunca pedia permissão de notificação — então
+      // mesmo depois de corrigido o disparo do aviso, ele ficaria bloqueado
+      // pelo sistema operacional por falta de autorização. O alerta continua
+      // sendo armado mesmo que a pessoa negue a notificação (ela ainda pode
+      // conferir na tela de agenda/viagem), mas avisamos que o aviso de "hora
+      // de sair" não vai aparecer sem essa permissão.
+      const notificationsEnabled = await enableTravelNotifications();
       await armMutation.mutateAsync({ installationId, appointmentLabel: input.title, appointmentAt, lineId: input.lineId, destinationLatitude: input.latitude, destinationLongitude: input.longitude, latitude: current.latitude, longitude: current.longitude, locationConsented: true });
       await startDepartureLocationUpdates(installationId);
       setLocationSharingEnabled(true);
-      Alert.alert("Alerta ativado", "O Urbico atualizará sua localização autorizada e avaliará o momento de saída para este compromisso.");
+      Alert.alert(
+        "Alerta ativado",
+        notificationsEnabled
+          ? "O Urbico atualizará sua localização autorizada e avisará por notificação o momento de saída para este compromisso."
+          : "O alerta foi ativado, mas as notificações estão desativadas: você não receberá o aviso de \"hora de sair\". Ative as notificações do Urbico nas configurações do aparelho para recebê-lo.",
+      );
     } catch (error) { Alert.alert("Alerta não ativado", error instanceof Error ? error.message : "Não foi possível preparar o alerta de saída."); }
   };
   const save = () => { if (!title.trim() || !date.trim() || !time.trim() || !address.trim()) return; const appointment = { title: title.trim(), date: date.trim(), time: time.trim(), address: address.trim(), latitude: place?.latitude, longitude: place?.longitude, relevantLineId: line?.id, relevantLineLabel: line?.label, alertsEnabled: Boolean(line && place) }; addAppointment(appointment); if (line && place) Alert.alert("Ativar alerta de saída?", "Com sua permissão, o Urbico enviará atualizações de localização ao servidor enquanto este alerta estiver ativo. Você poderá revogar a qualquer momento.", [{ text: "Agora não", style: "cancel" }, { text: "Ativar alerta", onPress: () => void armAlert({ title: appointment.title, date: appointment.date, time: appointment.time, latitude: place.latitude, longitude: place.longitude, lineId: line.id }) }]); setTitle(""); setDate(""); setTime(""); setAddress(""); setPlace(null); setLineQuery(""); setLine(null); };
