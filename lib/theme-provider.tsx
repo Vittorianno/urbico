@@ -61,7 +61,10 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     }),
     [colorScheme, setColorScheme],
   );
-  console.log(value, themeVariables)
+  // FIX: havia um `console.log(value, themeVariables)` aqui, disparado em
+  // TODA renderização do provedor de tema (ou seja, quase toda renderização
+  // do app inteiro, já que ele envolve toda a árvore) — puro ruído de debug
+  // esquecido, removido.
 
   return (
     <ThemeContext.Provider value={value}>
