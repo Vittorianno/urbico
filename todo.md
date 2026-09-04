@@ -63,7 +63,12 @@
 - [x] Corrigir áreas clicáveis sem resposta e garantir confirmação por teclado no chat.
 - [x] Validar visualmente o Norby em viewport móvel e salvar checkpoint da atualização.
 
-- [ ] Auditar conectores disponíveis e usar apenas os necessários ao Urbico.
-- [ ] Corrigir o envio de mensagens do Norby para limpar o campo e inserir a mensagem no histórico.
-- [ ] Revisar botões e áreas clicáveis do Urbico, incluindo navegação e ações do chat.
-- [ ] Validar fluxos corrigidos e preparar a publicação do código no GitHub conectado.
+- [x] Auditar conectores disponíveis e usar apenas os necessários ao Urbico.
+- [x] Corrigir o envio de mensagens do Norby para limpar o campo e inserir a mensagem no histórico.
+- [x] Revisar botões e áreas clicáveis do Urbico, incluindo navegação e ações do chat.
+- [x] Validar fluxos corrigidos e preparar a publicação do código no GitHub conectado.
+
+- [x] Auditar MCPs liberados e usar somente GitHub, Sentry ou Supabase quando forem necessários.
+- [x] Tornar o teste de fallback manual determinístico, sem depender de httpbin ou outra rede externa.
+- [x] Confirmar o fluxo de envio do Norby e investigar erros operacionais disponíveis.
+- [x] Sincronizar as correções finais no GitHub e salvar checkpoint.
