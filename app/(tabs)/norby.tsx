@@ -167,7 +167,11 @@ export default function NorbyScreen() {
           </>}
           renderItem={({ item }) => {
             const isUser = item.role === "user";
-            return <View style={[styles.messageRow, isUser && styles.messageRowUser]}>{!isUser ? <NorbyAvatar /> : null}<View style={[styles.messageColumn, isUser && styles.messageColumnUser]}><View style={[styles.messageBubble, isUser ? styles.userMessage : styles.norbyMessage]}><Text style={[styles.messageText, isUser && styles.userMessageText]}>{item.content}</Text></View><Text style={[styles.messageTime, isUser && styles.messageTimeUser]}>{new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}{isUser ? "  ✓✓" : ""}</Text></View></View>;
+            // FIX: antes usava `new Date()` (hora atual do render) em vez do
+            // horário real de criação da mensagem — todo item, mesmo antigo,
+            // mostrava a hora "agora" e ela mudava sozinha a cada re-render.
+            // Agora usa o `createdAt` gravado junto com a mensagem.
+            return <View style={[styles.messageRow, isUser && styles.messageRowUser]}>{!isUser ? <NorbyAvatar /> : null}<View style={[styles.messageColumn, isUser && styles.messageColumnUser]}><View style={[styles.messageBubble, isUser ? styles.userMessage : styles.norbyMessage]}><Text style={[styles.messageText, isUser && styles.userMessageText]}>{item.content}</Text></View><Text style={[styles.messageTime, isUser && styles.messageTimeUser]}>{new Date(item.createdAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}{isUser ? "  ✓✓" : ""}</Text></View></View>;
           }}
         />
 
