@@ -1,6 +1,6 @@
-import { and, eq, gt, isNull } from "drizzle-orm";
+import { and, desc, eq, gt, gte, isNull, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { departureAlerts, InsertDepartureAlert, InsertUser, users } from "../drizzle/schema";
+import { crowdReports, departureAlerts, InsertDepartureAlert, InsertUser, users } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -146,4 +146,42 @@ export async function markDepartureAlertSent(id: number) {
   const db = await getDb();
   if (!db) return;
   await db.update(departureAlerts).set({ alertedAt: new Date() }).where(eq(departureAlerts.id, id));
+}
+
+/**
+ * Grava um relato de lotação anônimo para uma linha. Não guarda nenhum
+ * identificador do dispositivo/usuário — só linha, nível e horário.
+ */
+export async function insertCrowdReport(lineId: number, level: (typeof crowdReports.$inferInsert)["level"]) {
+  const db = await getDb();
+  if (!db) throw new Error("Banco de dados indisponível para relatos de lotação.");
+  await db.insert(crowdReports).values({ lineId, level });
+}
+
+const CROWD_LEVEL_ORDER = ["Vazio", "Baixa", "Normal", "Alta", "Lotado"] as const;
+
+/**
+ * Agrega os relatos recentes (últimos `windowMinutes`) de uma linha pelo
+ * nível mais reportado. Retorna null se não há relatos recentes o
+ * suficiente para uma estimativa razoável.
+ */
+export async function getRecentCrowdSummary(lineId: number, windowMinutes = 30) {
+  const db = await getDb();
+  if (!db) return null;
+  const since = new Date(Date.now() - windowMinutes * 60 * 1000);
+  const rows = await db
+    .select({ level: crowdReports.level, count: sql<number>`count(*)`.as("count") })
+    .from(crowdReports)
+    .where(and(eq(crowdReports.lineId, lineId), gte(crowdReports.createdAt, since)))
+    .groupBy(crowdReports.level)
+    .orderBy(desc(sql`count(*)`));
+  if (rows.length === 0) return null;
+  const totalReports = rows.reduce((total, row) => total + Number(row.count), 0);
+  const topLevel = rows[0].level;
+  return {
+    level: topLevel,
+    totalReports,
+    // Índice na escala Vazio→Lotado, útil para ordenar/exibir sem repetir a lista de níveis no cliente.
+    levelIndex: CROWD_LEVEL_ORDER.indexOf(topLevel),
+  };
 }
