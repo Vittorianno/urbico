@@ -45,3 +45,20 @@ export const departureAlerts = mysqlTable("departure_alerts", {
 
 export type DepartureAlert = typeof departureAlerts.$inferSelect;
 export type InsertDepartureAlert = typeof departureAlerts.$inferInsert;
+
+/**
+ * Relatos de lotação por linha. Anônimo por design: não guarda
+ * installationId nem qualquer identificador de quem reportou, apenas a
+ * linha, o nível relatado e o momento — o suficiente para agregar por
+ * recência/quantidade sem expor identidade (ver decisão de produto do
+ * Urbico sobre lotação colaborativa).
+ */
+export const crowdReports = mysqlTable("crowd_reports", {
+  id: int("id").autoincrement().primaryKey(),
+  lineId: int("line_id").notNull(),
+  level: mysqlEnum("level", ["Vazio", "Baixa", "Normal", "Alta", "Lotado"]).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export type CrowdReport = typeof crowdReports.$inferSelect;
+export type InsertCrowdReport = typeof crowdReports.$inferInsert;
