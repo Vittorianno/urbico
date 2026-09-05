@@ -16,6 +16,8 @@ const safeIntegration = async <T>(operation: () => Promise<T>) => {
   }
 };
 
+const crowdLevelSchema = z.enum(["Vazio", "Baixa", "Normal", "Alta", "Lotado"]);
+
 export const appRouter = router({
   // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
   system: systemRouter,
@@ -85,6 +87,18 @@ export const appRouter = router({
     state: publicProcedure.input(z.object({ installationId: z.string().uuid() })).query(async ({ input }) => {
       const alert = await db.getDepartureAlert(input.installationId);
       return alert ? { armed: alert.isEnabled && alert.locationConsented, alertedAt: alert.alertedAt?.toISOString() ?? null, appointmentLabel: alert.appointmentLabel } : { armed: false, alertedAt: null, appointmentLabel: null };
+    }),
+  }),
+  // Agregação colaborativa de lotação por linha. Anônima por design: o
+  // servidor nunca recebe nem grava qualquer identificador do dispositivo.
+  crowdReports: router({
+    submit: publicProcedure.input(z.object({ lineId: z.number().int().positive(), level: crowdLevelSchema })).mutation(async ({ input }) => {
+      await db.insertCrowdReport(input.lineId, input.level);
+      return { submitted: true };
+    }),
+    recent: publicProcedure.input(z.object({ lineId: z.number().int().positive() })).query(async ({ input }) => {
+      const summary = await db.getRecentCrowdSummary(input.lineId);
+      return summary ?? { level: null, totalReports: 0, levelIndex: -1 };
     }),
   }),
 });
