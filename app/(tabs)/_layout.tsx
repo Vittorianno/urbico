@@ -3,7 +3,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { HapticTab } from "@/components/haptic-tab";
 import { Platform, Text } from "react-native";
-import { useColors } from "@/hooks/use-colors";
+import { colors } from "@/components/urbico-ui";
 
 const tabGlyphs = { home: "⌂", map: "▣", norby: "◉", profile: "●" } as const;
 
@@ -12,7 +12,6 @@ function TabIcon({ name, color }: { name: keyof typeof tabGlyphs; color: string 
 }
 
 export default function TabLayout() {
-  const colors = useColors();
   const insets = useSafeAreaInsets();
   const bottomPadding = Platform.OS === "web" ? 12 : Math.max(insets.bottom, 8);
   const tabBarHeight = 56 + bottomPadding;
@@ -20,7 +19,14 @@ export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: colors.tint,
+        // FIX: antes usava useColors(), que segue o tema claro/escuro do
+        // sistema operacional. Como todas as outras telas do app usam a
+        // paleta escura fixa de components/urbico-ui (decisão documentada de
+        // "tema único escuro, sem light"), um aparelho no modo claro fazia só
+        // a barra de abas virar clara, destoando do resto da interface, que
+        // continua sempre escura. Agora a barra de abas usa a mesma paleta
+        // fixa das demais telas.
+        tabBarActiveTintColor: colors.blue,
         tabBarInactiveTintColor: colors.muted,
         headerShown: false,
         tabBarButton: HapticTab,
