@@ -7,6 +7,7 @@ import { registerOAuthRoutes } from "./oauth";
 import { registerStorageProxy } from "./storageProxy";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
+import { evaluateDepartureAlerts } from "../leave-alert-monitor";
 import { handleDepartureAlertMonitor } from "../scheduled/departure-alerts";
 
 function isPortAvailable(port: number): Promise<boolean> {
@@ -26,6 +27,28 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
     }
   }
   throw new Error(`No available port found starting from ${startPort}`);
+}
+
+// FIX: o monitoramento do alerta de saída (evaluateDepartureAlerts) só era
+// disparado via POST /api/scheduled/monitor-departure-alerts, autenticado
+// como uma tarefa de cron do Manus (ver server/_core/heartbeat.ts). Nada no
+// projeto jamais registrava esse cron (createHeartbeatJob nunca é chamado em
+// lugar nenhum) — ou seja, fora da hospedagem do Manus, essa avaliação nunca
+// rodava sozinha. Para o backend funcionar de forma independente, ele agora
+// roda a própria checagem periodicamente, sem depender de nenhum serviço
+// externo de agendamento. O endpoint HTTP continua disponível para quem
+// preferir acioná-lo por um cron externo da própria infraestrutura de
+// hospedagem (ex.: Vercel Cron, GitHub Actions).
+const DEPARTURE_ALERT_INTERVAL_MS = 60_000;
+
+function startDepartureAlertScheduler() {
+  const run = () => {
+    evaluateDepartureAlerts().catch((error) => {
+      console.error("[departure-alerts] evaluation failed:", error);
+    });
+  };
+  run();
+  setInterval(run, DEPARTURE_ALERT_INTERVAL_MS);
 }
 
 async function startServer() {
@@ -63,6 +86,8 @@ async function startServer() {
     res.json({ ok: true, timestamp: Date.now() });
   });
 
+  // Mantido para hospedagens que preferem acionar o monitoramento via cron
+  // HTTP externo em vez do agendador interno abaixo.
   app.post("/api/scheduled/monitor-departure-alerts", handleDepartureAlertMonitor);
 
   app.use(
@@ -82,6 +107,7 @@ async function startServer() {
 
   server.listen(port, () => {
     console.log(`[api] server listening on port ${port}`);
+    startDepartureAlertScheduler();
   });
 }
 
