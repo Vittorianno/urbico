@@ -44,7 +44,13 @@ export function estimateLeaveAlert(input: {
     Math.max(0, input.walkingSeconds) + waitForVehicleSeconds + busRideSeconds + finalWalkingSeconds + transferBufferSeconds;
   const leaveBy = new Date(input.appointmentAt.getTime() - estimatedTravelSeconds * 1000);
   const secondsUntilLeave = Math.round((leaveBy.getTime() - input.now.getTime()) / 1000);
-  const hasFullRouteData = input.vehicleDistanceMeters !== null && input.busRideSeconds != null && input.finalWalkingSeconds != null;
+  // FIX: a confiança reflete se há um veículo real localizado (sinal de tempo real da
+  // SPTrans) — a mesma regra de antes desta rodada de correções. Passar também
+  // busRideSeconds/finalWalkingSeconds refina o TEMPO estimado (o bug real: o
+  // trecho de ônibus e a caminhada final eram ignorados por completo), mas não deve
+  // mudar o rótulo de confiança, que outras partes do código (e os testes) já tratam
+  // como "há veículo em tempo real vs. não há".
+  const confidence = input.vehicleDistanceMeters === null ? ("limitada" as const) : ("estimada" as const);
   return {
     shouldLeave: secondsUntilLeave <= 0,
     leaveBy,
@@ -53,6 +59,6 @@ export function estimateLeaveAlert(input: {
     vehicleSeconds: waitForVehicleSeconds,
     busRideSeconds,
     finalWalkingSeconds,
-    confidence: hasFullRouteData ? ("estimada" as const) : ("limitada" as const),
+    confidence,
   };
 }
