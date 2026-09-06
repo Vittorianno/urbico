@@ -45,7 +45,8 @@ app-example
 /android
 
 # IDE
-.vscode/
+.vscode/*
+!.vscode/mcp.json
 .idea/
 *.swp
 *.swo

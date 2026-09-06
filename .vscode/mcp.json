@@ -1,0 +1,12 @@
+{
+  // Configuração do GitHub MCP Server oficial e remoto para uso dentro do
+  // Codespace por agentes compatíveis com MCP (Claude, Copilot Chat, etc.).
+  // Nenhum token fica neste arquivo: a autenticação usa o fluxo OAuth do
+  // GitHub, disparado pelo próprio editor/agente ao conectar.
+  "servers": {
+    "github": {
+      "type": "http",
+      "url": "https://api.githubcopilot.com/mcp/"
+    }
+  }
+}

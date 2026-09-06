@@ -1,0 +1,40 @@
+{
+  "name": "Urbico (Expo + Express + tRPC)",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:1-20-bookworm",
+
+  "features": {
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+
+  "forwardPorts": [3000, 8081],
+  "portsAttributes": {
+    "3000": {
+      "label": "Backend (Express + tRPC)",
+      "onAutoForward": "notify"
+    },
+    "8081": {
+      "label": "Metro / Expo Web",
+      "onAutoForward": "openPreview"
+    }
+  },
+
+  "postCreateCommand": "corepack enable && corepack prepare pnpm@9.12.0 --activate && pnpm install --frozen-lockfile",
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "expo.vscode-expo-tools"
+      ],
+      "settings": {
+        "editor.defaultFormatter": "esbenp.prettier-vscode",
+        "editor.formatOnSave": true
+      }
+    }
+  },
+
+  "remoteEnv": {
+    "NODE_ENV": "development"
+  }
+}
