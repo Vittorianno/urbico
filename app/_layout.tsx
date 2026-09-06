@@ -1,3 +1,4 @@
+import "@/lib/polyfills";
 import "@/global.css";
 import "@/lib/departure-location-task";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
