@@ -11,6 +11,7 @@ Nenhuma tela, funcionalidade ou dependência do Urbico foi alterada por isso.
 ## Iniciar o Urbico dentro do Codespace
 
 ```bash
+cp .env.example .env   # preencha com seus próprios valores (ou use Codespaces Secrets, abaixo)
 pnpm dev
 ```
 
@@ -24,11 +25,14 @@ dispositivo físico ou emulador local ao endereço público da porta 8081).
 
 ## Variáveis de ambiente / Secrets
 
-O repositório já traz um `.env` com valores de desenvolvimento não sensíveis
-(inclui um `JWT_SECRET` de exemplo, claramente marcado como "change in
-production" — não é um segredo real). Para qualquer valor real (banco de
-dados, `SPTRANS_TOKEN`, OAuth, etc.), configure **Codespaces Secrets** em vez
-de editar o `.env` versionado:
+O repositório **não** versiona nenhum `.env` (está no `.gitignore` — um `.env`
+chegou a ser commitado por engano em 2026-09-06 e foi removido; nenhum segredo
+real chegou a vazar, só um `JWT_SECRET` de exemplo, que não deve ser
+reaproveitado). Copie `.env.example` para `.env` dentro do Codespace e
+preencha com seus próprios valores de desenvolvimento.
+
+Para qualquer valor real (banco de dados, `SPTRANS_TOKEN`, OAuth, etc.),
+prefira **Codespaces Secrets** em vez de editar o `.env` local:
 
 GitHub → Settings do repositório (ou da conta) → **Codespaces** → **Secrets**
 → adicionar cada variável listada em `.env.example`.
@@ -50,6 +54,13 @@ ChatGPT (conector/integração do GitHub nas configurações da própria conta
 ChatGPT), autorizando acesso ao repositório `Vittorianno/urbico` — isso não
 depende de nenhum arquivo deste repositório, só da autorização OAuth
 concedida na hora de conectar.
+
+> Nota para quem for revisar relatórios de auditoria gerados por outro
+> agente: confirme sempre contra o conteúdo atual do arquivo antes de agir —
+> já houve pelo menos um caso (`docs/AUDIT-REPORT.md`, 06/09) que apontou como
+> "quebrado" algo que já estava corrigido em um commit anterior. Ferramentas
+> de busca/análise remota podem ficar desatualizadas; o arquivo em si é a
+> fonte da verdade.
 
 ## Verificação rápida do ambiente
 

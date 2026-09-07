@@ -1,3 +1,18 @@
+> **Nota de correção (07/09, outra sessão de auditoria):** dois itens
+> listados abaixo como quebrados/não integrados já estavam corrigidos no
+> código quando este relatório foi escrito, e foram verificados de novo
+> agora, lendo o arquivo diretamente:
+> - **"C.2 Voz não captura"** — `ExpoSpeechRecognitionModule.start(...)` já é
+>   chamado em `app/(tabs)/norby.tsx` (a API citada aqui, `startAsync()`, não
+>   existe na biblioteca usada pelo projeto, `expo-speech-recognition`).
+> - **"C.3 Notificação não dispara"** — `scheduleTravelNotice()` já é chamado
+>   em `lib/departure-location-task.ts`.
+>
+> "E.6 Criar eas.json" e "C.4 OAuth incompatível" continuam válidos e sem
+> solução definitiva (eas.json foi criado nesta mesma auditoria; a migração
+> de OAuth depende de uma decisão de produto ainda pendente — ver README).
+> O restante deste relatório não foi reverificado linha a linha.
+
 # URBICO — Relatório de Auditoria Executivo
 
 **Data:** 2026-09-06  
