@@ -8,8 +8,19 @@ function isIpAddress(host: string) {
   return host.includes(":");
 }
 
+// FIX: cookies com `sameSite: "none"` só são aceitos pelo navegador se também
+// tiverem `secure: true` — caso contrário o navegador descarta o cookie por
+// completo, silenciosamente. O código antigo considerava `http://localhost`
+// sempre "inseguro" (`req.protocol !== "https"`), então em desenvolvimento
+// local (`pnpm dev`, backend em :3000, Metro/web em :8081 — duas origens
+// diferentes) o cookie de sessão do login nunca era aceito pelo navegador, e
+// o login web ficava quebrado sem nenhum erro visível. Chrome e Edge tratam
+// `localhost`/`127.0.0.1` como "origem confiável" e aceitam cookies `Secure`
+// mesmo sobre HTTP puro nesse caso específico — então tratamos esses hosts
+// como seguros para fins de cookie, igual o próprio navegador já faz.
 function isSecureRequest(req: Request) {
   if (req.protocol === "https") return true;
+  if (LOCAL_HOSTS.has(req.hostname)) return true;
 
   const forwardedProto = req.headers["x-forwarded-proto"];
   if (!forwardedProto) return false;
