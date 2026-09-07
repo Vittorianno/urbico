@@ -22,7 +22,7 @@ Por padrão, o Norby usa respostas locais e determinísticas, sem chamadas a um 
 
 ## Alerta de saída monitorado
 
-O alerta requer consentimento explícito para localização compartilhada. O servidor cruza a última posição autorizada, a caminhada até a parada, os veículos da linha relevante e o horário do compromisso. A pessoa pode revogar o compartilhamento nas configurações. A execução contínua e o push remoto continuam condicionados à hospedagem persistente e à configuração de entrega de notificações.
+O alerta requer consentimento explícito para localização compartilhada. O servidor cruza a última posição autorizada, a caminhada até a parada, os veículos da linha relevante, uma estimativa do trecho de ônibus e da caminhada final, e o horário do compromisso. A avaliação roda internamente no próprio processo do backend a cada 60 segundos (sem depender de um cron externo); quando decide que é hora de sair, o aplicativo dispara uma notificação **local** no aparelho (via `expo-notifications`, sem exigir infraestrutura de push remoto como FCM/APNs) na próxima vez que enviar sua localização em segundo plano. A pessoa pode revogar o compartilhamento nas configurações. O único requisito de hospedagem é manter o processo do backend em execução contínua (qualquer hospedagem Node padrão serve).
 
 ## Referências
 
