@@ -1,5 +1,14 @@
 # 🚀 URBICO — Guia de Teste Real via Expo Go
 
+> **Nota de correção (07/09):** a seção "🐛 Se Algo Quebrar" abaixo lista
+> "Nenhuma notificação quando sair" como esperado por a funcionalidade "ainda
+> não wired" — isso já foi corrigido (`scheduleTravelNotice()` é chamado em
+> `lib/departure-location-task.ts` sempre que o servidor marca o alerta como
+> disparado). Se a notificação não aparecer no teste, é bug de verdade, não
+> comportamento esperado — verifique se a permissão de notificação foi
+> concedida (`enableTravelNotifications()`, chamado ao armar o alerta em
+> `app/(tabs)/agenda.tsx`) antes de reportar.
+
 Este documento orienta o teste completo do Urbico em dispositivo Android real via Expo Go ou dev client.
 
 ---
@@ -7,7 +16,7 @@ Este documento orienta o teste completo do Urbico em dispositivo Android real vi
 ## 📋 Pré-requisitos
 
 ✅ **Já Configurado:**
-- `.env` criado com variáveis básicas
+- `.env.example` documentado (copie para `.env` e preencha os valores)
 - `package.json` com todos os scripts
 - Backend (Express + tRPC) pronto
 - Estrutura Expo+Metro configurada
@@ -163,8 +172,18 @@ Solução: Esperado se sem SPTRANS_TOKEN
 
 ### Nenhuma notificação quando sair
 ```
-Status: Esperado em dev
-  Funcionalidade de notificação ainda não wired (P0-3 da auditoria)
+Status: NÃO é mais esperado (ver nota de correção no topo do documento).
+Verifique, nesta ordem:
+  1. A permissão de notificação foi concedida no Android (Configurações do
+     app > Notificações)?
+  2. O alerta foi realmente armado (agenda.tsx chamou departureAlerts.arm
+     com sucesso, sem erro no Alert exibido)?
+  3. DATABASE_URL está configurado? Sem banco, o alerta não persiste.
+  4. O agendador interno do backend está rodando (log
+     "[departure-alerts] evaluation failed" apareceria no terminal em caso
+     de erro; silêncio é esperado quando não há alerta elegível ainda)?
+Se tudo isso estiver certo e ainda assim não notificar, é um bug real —
+reporte com os logs do terminal do backend.
 ```
 
 ---
@@ -191,7 +210,7 @@ Depois que terminar, colete:
 
 ## 🎯 Próximos Passos Após Teste
 
-- ✅ Se tudo passar → Prossiga para **P0-2: Implementar captura de voz**
+- ✅ Se tudo passar → Prossiga para o teste real de voz/notificação em dispositivo
 - ❌ Se algo quebrar → Reporte o erro específico
 - ⚠️ Se parcial → Documente o que não funciona
 
