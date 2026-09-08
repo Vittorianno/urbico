@@ -21,7 +21,10 @@ const config: ExpoConfig = {
   icon: "./assets/images/icon.png",
   scheme: env.scheme,
   userInterfaceStyle: "dark",
-  newArchEnabled: true,
+  // FIX: `newArchEnabled` foi removido do app.config a partir do Expo SDK 55
+  // — a partir dessa versão a Nova Arquitetura é a única opção (não existe
+  // mais Legacy Architecture para alternar), então esta chave ficou obsoleta
+  // e sem efeito no SDK 57. Removida.
   ios: {
     supportsTablet: true,
     bundleIdentifier: env.iosBundleId,
