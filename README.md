@@ -5,8 +5,8 @@ voz **Norby**. Integra dados oficiais da SPTrans (Olho Vivo) para calcular
 rotas, acompanhar veículos em tempo real e avisar a melhor hora de sair de
 casa para chegar a um compromisso.
 
-Stack: **Expo (React Native + Web)**, **Expo Router**, **tRPC**, **Drizzle
-ORM / MySQL**, **MapLibre**.
+Stack: **Expo SDK 57** (React Native 0.86 + React 19.2, Nova Arquitetura),
+**Expo Router**, **tRPC**, **Drizzle ORM / MySQL**, **MapLibre**.
 
 ## Sumário
 
@@ -38,14 +38,22 @@ ORM / MySQL**, **MapLibre**.
 
 ```bash
 pnpm install
+npx expo install --fix   # confere/ajusta cada pacote nativo para a versão exata compatível com o Expo SDK 57
 cp .env.example .env
 # edite .env com seus valores (veja a seção abaixo)
 ```
 
 **Sempre que você puxar mudanças do GitHub (`git pull`) que alterem
-`package.json`, rode `pnpm install` de novo antes de tentar rodar o app.**
-Um `node_modules` desatualizado em relação ao `package.json` é a causa mais
-comum de erros como `Cannot find module` — veja [Solução de problemas](#solução-de-problemas).
+`package.json`, rode `pnpm install` de novo (e considere `npx expo install --fix`
+depois) antes de tentar rodar o app.** Um `node_modules` desatualizado em
+relação ao `package.json` é a causa mais comum de erros como
+`Cannot find module` — veja [Solução de problemas](#solução-de-problemas).
+
+`npx expo install --fix` é o comando oficial da Expo para acertar a versão
+exata de cada pacote nativo (`react-native-reanimated`, `react-native-screens`,
+etc.) contra a base de compatibilidade mantida pela própria Expo — mais
+confiável do que fixar esses números à mão, porque essa base muda com
+frequência a cada patch de SDK.
 
 ## Variáveis de ambiente
 
@@ -201,6 +209,11 @@ no próprio Android, mas com limites importantes:
 - Depois de qualquer `git pull` que mude `package.json`, rode a instalação de
   novo (`npm install` ou `pnpm install`, conforme o que você estiver usando)
   antes de rodar `npx expo start` — ver [Solução de problemas](#solução-de-problemas).
+- **Sempre `cd urbico` (ou o nome da pasta do repositório clonado) antes de
+  rodar qualquer comando.** Rodar `npx expo start` na pasta `~` (home) do
+  Termux, fora do repositório, dá `ConfigError: The expected package.json
+  path ... does not exist` — não é um bug do projeto, é só estar no diretório
+  errado.
 
 ## EAS Build e geração de APK
 
@@ -267,6 +280,7 @@ mudanças de dependências e a instalação não foi refeita depois. Resolva com
 ```bash
 rm -rf node_modules
 pnpm install     # ou: npm install, se estiver usando npm
+npx expo install --fix
 npx expo start
 ```
 
@@ -274,6 +288,11 @@ Se o erro persistir mesmo depois de reinstalar do zero, é um problema real de
 versão — copie a mensagem de erro completa (não só o início) e o `git log -1`
 para eu conferir se há alguma incompatibilidade entre as versões do
 `package.json`.
+
+### `ConfigError: The expected package.json path ... does not exist`
+
+Você não está dentro da pasta do repositório. Rode `cd urbico` (ou o nome que
+você deu à pasta clonada) antes de qualquer comando `npx expo ...`.
 
 ### `npm warn Unknown project config "node-linker"`
 
@@ -296,6 +315,15 @@ Significa que `pnpm-lock.yaml` está desatualizado em relação a
 `package.json`. Rode `pnpm install` (sem `--frozen-lockfile`) uma vez para
 regenerar o lockfile, confira que `pnpm check`/`pnpm test` passam, e comite o
 `pnpm-lock.yaml` resultante.
+
+### Erro de peer dependency ao instalar (`ERESOLVE`, conflito de versão)
+
+O Expo SDK 57 tem versões de pacotes que mudam com frequência (React Native
+0.86, Nova Arquitetura). Se `pnpm install` reclamar de uma versão específica
+que não existe mais ou de um conflito de peer dependency, rode
+`npx expo install --fix` (corrige contra a base de compatibilidade oficial da
+Expo) antes de mexer manualmente em qualquer número de versão no
+`package.json`.
 
 ## Dependências legadas do template Manus
 
