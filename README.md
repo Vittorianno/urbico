@@ -21,8 +21,10 @@ ORM / MySQL**, **MapLibre**.
 - [Autenticação — leia antes de publicar](#autenticação--leia-antes-de-publicar)
 - [Execução Web](#execução-web)
 - [Execução Android (Expo Go / dev client)](#execução-android-expo-go--dev-client)
+- [Desenvolvendo direto no celular (Termux)](#desenvolvendo-direto-no-celular-termux)
 - [EAS Build e geração de APK](#eas-build-e-geração-de-apk)
 - [Testes e qualidade](#testes-e-qualidade)
+- [Solução de problemas](#solução-de-problemas)
 - [Dependências legadas do template Manus](#dependências-legadas-do-template-manus)
 
 ## Requisitos
@@ -39,6 +41,11 @@ pnpm install
 cp .env.example .env
 # edite .env com seus valores (veja a seção abaixo)
 ```
+
+**Sempre que você puxar mudanças do GitHub (`git pull`) que alterem
+`package.json`, rode `pnpm install` de novo antes de tentar rodar o app.**
+Um `node_modules` desatualizado em relação ao `package.json` é a causa mais
+comum de erros como `Cannot find module` — veja [Solução de problemas](#solução-de-problemas).
 
 ## Variáveis de ambiente
 
@@ -172,6 +179,29 @@ eas build --profile development --platform android
 Instale o `.apk` gerado no aparelho/emulador e rode `pnpm dev:metro` para
 conectar.
 
+## Desenvolvendo direto no celular (Termux)
+
+É possível rodar o servidor Metro/Expo dentro do [Termux](https://termux.dev/)
+no próprio Android, mas com limites importantes:
+
+- **Funciona:** `npx expo start` (só o Metro bundler, JavaScript) conectado
+  ao **Expo Go** ou a um dev client já instalado, para telas que não exigem
+  módulo nativo novo.
+- **Não funciona bem no Termux:** compilar módulos nativos localmente
+  (`expo run:android`, `eas build --local`) — Termux não tem o Android SDK/NDK
+  completo nem o Gradle configurado da forma que esses comandos esperam. Para
+  gerar o `.apk`/dev client, use `eas build` (nuvem, ver seção seguinte) a
+  partir de qualquer máquina — inclusive o próprio Termux, já que `eas build`
+  sem `--local` só envia o código para compilar nos servidores da Expo.
+- Se o Termux estiver usando `npm` em vez de `pnpm` (comum, pnpm pode ser mais
+  trabalhoso de instalar no Termux), tudo bem — o projeto funciona com os
+  dois. Só não deixe os dois lockfiles (`package-lock.json` e
+  `pnpm-lock.yaml`) coexistirem; escolha um gerenciador e apague o
+  `node_modules` se trocar de um para o outro.
+- Depois de qualquer `git pull` que mude `package.json`, rode a instalação de
+  novo (`npm install` ou `pnpm install`, conforme o que você estiver usando)
+  antes de rodar `npx expo start` — ver [Solução de problemas](#solução-de-problemas).
+
 ## EAS Build e geração de APK
 
 1. Instale a CLI e faça login (uma vez):
@@ -209,6 +239,10 @@ eas build --platform android --profile preview
 (gera um `.apk` de distribuição interna, instalável diretamente no
 aparelho via link/QR code que o EAS fornece ao final do build).
 
+Isso roda **na nuvem** da Expo — funciona a partir de qualquer terminal com
+`eas-cli` e login, incluindo o Termux, mesmo sem SDK Android instalado
+localmente.
+
 ## Testes e qualidade
 
 ```bash
@@ -221,6 +255,47 @@ Alguns testes (`tests/external-integrations.test.ts`,
 `tests/server-integrations.test.ts`) fazem chamadas de rede reais à API
 pública da SPTrans e exigem `SPTRANS_TOKEN` configurado no ambiente de teste
 para passar.
+
+## Solução de problemas
+
+### `Error: Cannot find module 'expo/config-plugins'` (ou qualquer outro `Cannot find module` logo ao rodar `expo start`)
+
+Quase sempre significa que o `node_modules` está desatualizado em relação ao
+`package.json` atual — geralmente porque houve um `git pull` que trouxe
+mudanças de dependências e a instalação não foi refeita depois. Resolva com:
+
+```bash
+rm -rf node_modules
+pnpm install     # ou: npm install, se estiver usando npm
+npx expo start
+```
+
+Se o erro persistir mesmo depois de reinstalar do zero, é um problema real de
+versão — copie a mensagem de erro completa (não só o início) e o `git log -1`
+para eu conferir se há alguma incompatibilidade entre as versões do
+`package.json`.
+
+### `npm warn Unknown project config "node-linker"`
+
+Inofensivo. `.npmrc` tem `node-linker=hoisted`, que é uma configuração
+específica do **pnpm**; o `npm` simplesmente ignora essa linha (e avisa que
+não a reconhece) — não impede a instalação de funcionar.
+
+### Dois lockfiles ao mesmo tempo (`package-lock.json` e `pnpm-lock.yaml`)
+
+Não devem coexistir — escolha um gerenciador (`pnpm` é o padrão do projeto:
+ver `packageManager` em `package.json`) e apague o lockfile do outro antes de
+instalar. Misturar os dois já causou uma resolução de dependências quebrada
+neste repositório uma vez; o `.gitignore` agora impede o `package-lock.json`
+de ser commitado de novo, mas ele ainda pode existir localmente sem ser
+enviado ao Git.
+
+### `pnpm install --frozen-lockfile` falhando
+
+Significa que `pnpm-lock.yaml` está desatualizado em relação a
+`package.json`. Rode `pnpm install` (sem `--frozen-lockfile`) uma vez para
+regenerar o lockfile, confira que `pnpm check`/`pnpm test` passam, e comite o
+`pnpm-lock.yaml` resultante.
 
 ## Dependências legadas do template Manus
 
