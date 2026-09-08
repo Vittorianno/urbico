@@ -3,6 +3,13 @@
 # dependencies
 node_modules/
 
+# Este projeto usa pnpm (ver packageManager em package.json e node-linker em
+# .npmrc). Lockfiles de outros gerenciadores não devem ser commitados — já
+# aconteceu um package-lock.json parar aqui por engano, coexistindo com o
+# pnpm-lock.yaml e arriscando resolução de dependências divergente.
+package-lock.json
+yarn.lock
+
 # Expo
 .expo/
 dist/
