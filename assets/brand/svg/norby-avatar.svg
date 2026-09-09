@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+  <defs>
+    <linearGradient id="avatarBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1B2540"/>
+      <stop offset="100%" stop-color="#0B0F1A"/>
+    </linearGradient>
+    <linearGradient id="ring" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2F7FF5"/>
+      <stop offset="100%" stop-color="#3ED6D1"/>
+    </linearGradient>
+  </defs>
+  <circle cx="100" cy="100" r="98" fill="url(#avatarBg)" stroke="url(#ring)" stroke-width="4"/>
+  <!-- head -->
+  <rect x="46" y="56" width="108" height="92" rx="40" fill="none" stroke="url(#ring)" stroke-width="10"/>
+  <rect x="30" y="88" width="16" height="42" rx="8" fill="#2F7FF5"/>
+  <rect x="154" y="88" width="16" height="42" rx="8" fill="#2F7FF5"/>
+  <!-- eyes -->
+  <circle cx="82" cy="100" r="11" fill="#3ED6D1"/>
+  <circle cx="118" cy="100" r="11" fill="#3ED6D1"/>
+  <!-- smile -->
+  <path d="M78 122c6 8 15 12 22 12s16-4 22-12" stroke="#EAF2FF" stroke-width="7" stroke-linecap="round" fill="none"/>
+  <!-- status dot -->
+  <circle cx="158" cy="150" r="12" fill="#22C55E" stroke="#0B0F1A" stroke-width="4"/>
+</svg>
