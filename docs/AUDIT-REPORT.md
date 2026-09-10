@@ -13,6 +13,16 @@
 > de OAuth depende de uma decisão de produto ainda pendente — ver README).
 > O restante deste relatório não foi reverificado linha a linha.
 
+> **Nota de correção (10/09, outra sessão de auditoria):** **"C.4 OAuth
+> incompatível" está resolvido.** A decisão de produto pendente (qual
+> provedor usar) foi tomada: Supabase Auth. `server/_core/sdk.ts` e
+> `server/_core/oauth.ts` não falam mais o protocolo Manus; `app/login.tsx`
+> (novo) é a tela de login/cadastro por e-mail+senha via
+> `@supabase/supabase-js`. Detalhes de como o fluxo funciona agora estão no
+> README, seção "Autenticação (Supabase Auth)" — inclusive os dois passos
+> manuais que ainda faltam (habilitar o provedor no painel do Supabase e
+> preencher as variáveis de ambiente).
+
 # URBICO — Relatório de Auditoria Executivo
 
 **Data:** 2026-09-06  
@@ -80,17 +90,21 @@ O Urbico é um aplicativo React Native/Expo de mobilidade urbana com assistente 
 | **Rota a Pé** | ⚠️ Principal funciona | Alternativas não existem (hardcoded UI) | Baixo—principal é suficiente |
 | **Busca de Endereço** | ⚠️ Degradado | Sem Pelias, fallback manual | Baixo—gracioso |
 
+*(Ver notas de correção no topo do documento — vários destes itens já foram resolvidos depois desta tabela ter sido escrita.)*
+
 ---
 
 ## 🔴 C. O Que Está Quebrado
 
+*(Ver notas de correção no topo do documento — vários destes itens já foram resolvidos depois desta tabela ter sido escrita.)*
+
 | # | Problema | Causa | Solução |
 |---|---|---|---|
 | 1 | **TypeScript check** | Nenhum (lint passa) | ✅ Resolvido—`lib/transit-engine.ts` é válido |
-| 2 | **Voz não captura** | `SpeechRecognition.startAsync()` não chamado | Implementar no Norby screen |
-| 3 | **Notificação não dispara** | `scheduleTravelNotice()` não chamada | Chamar em `departure-location-task.ts` |
-| 4 | **OAuth incompatível** | Protocolo Manus, não padrão | Migrar para Google/Apple/GitHub ou próprio |
-| 5 | **eas.json inexistente** | Arquivo não criado | Criar perfis (dev, preview, prod) |
+| 2 | **Voz não captura** | `SpeechRecognition.startAsync()` não chamado | ✅ Resolvido (ver nota 07/09) |
+| 3 | **Notificação não dispara** | `scheduleTravelNotice()` não chamada | ✅ Resolvido (ver nota 07/09) |
+| 4 | **OAuth incompatível** | Protocolo Manus, não padrão | ✅ Resolvido (ver nota 10/09) — Supabase Auth |
+| 5 | **eas.json inexistente** | Arquivo não criado | ✅ Resolvido (ver nota 07/09) |
 
 ---
 
@@ -112,10 +126,10 @@ O Urbico é um aplicativo React Native/Expo de mobilidade urbana com assistente 
 | **1** | Verificar TypeScript (pnpm check) | Baixa | Bloqueia build | 5 min |
 | **2** | Testar em Expo Go (navegador) | Baixa | Validação | 10 min |
 | **3** | Testar em Android real | Baixa | Validação | 15 min |
-| **4** | Implementar voz—captura | Média | Core Norby | 2-3 h |
-| **5** | Implementar notificações—alertas | Baixa | Core alertas | 1-2 h |
-| **6** | Criar eas.json | Baixa | Build Android | 30 min |
-| **7** | Migrar OAuth | Alta | Produção | 4-6 h |
+| **4** | Implementar voz—captura | Média | Core Norby | ✅ Resolvido |
+| **5** | Implementar notificações—alertas | Baixa | Core alertas | ✅ Resolvido |
+| **6** | Criar eas.json | Baixa | Build Android | ✅ Resolvido |
+| **7** | Migrar OAuth | Alta | Produção | ✅ Resolvido — Supabase Auth |
 
 ---
 
@@ -132,6 +146,8 @@ EXPO_PORT=8081
 # Ollama desativado (Norby usa regras locais)
 ```
 
+*(Desatualizado — a autenticação hoje usa Supabase, não OAuth Manus. Ver `.env.example` para as variáveis atuais.)*
+
 ### Dependências Criticas
 - ✅ pnpm 9.12.0
 - ✅ Node.js 20+
@@ -140,6 +156,8 @@ EXPO_PORT=8081
 - ✅ tRPC 11.7.2
 - ✅ Drizzle ORM 0.44.7
 - ✅ MapLibre React Native 11.3.7
+
+*(Desatualizado — ver `package.json` para as versões reais atuais, ex.: Expo SDK 57.)*
 
 ### Permissões (Android)
 - ✅ `ACCESS_COARSE_LOCATION`
@@ -186,11 +204,11 @@ pnpm dev
 ## 📈 H. Roadmap Pós-Teste
 
 **Se tudo passar:**
-1. **P0-2:** Implementar captura de voz (Norby)
-2. **P0-3:** Implementar notificações locais (alertas)
-3. **P0-4:** Criar eas.json para APK
-4. **P1:** Teste completo em dispositivo (GPS, SPTrans, voz end-to-end)
-5. **P1:** Revisão de autenticação para produção
+1. **P0-2:** Implementar captura de voz (Norby) — ✅ Resolvido
+2. **P0-3:** Implementar notificações locais (alertas) — ✅ Resolvido
+3. **P0-4:** Criar eas.json para APK — ✅ Resolvido
+4. **P1:** Teste completo em dispositivo (GPS, SPTrans, voz end-to-end) — pendente, precisa de dispositivo real
+5. **P1:** Revisão de autenticação para produção — ✅ Resolvido (Supabase Auth)
 
 **Se algo quebrar:**
 1. Reporte erro específico
