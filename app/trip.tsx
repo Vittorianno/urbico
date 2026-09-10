@@ -5,14 +5,41 @@ import { Share, Pressable, ScrollView, StyleSheet, Text, View } from "react-nati
 import { ScreenContainer } from "@/components/screen-container";
 import { colors, InfoCard, PrimaryButton, SecondaryButton } from "@/components/urbico-ui";
 import { useUrbico } from "@/lib/urbico-context";
+import { trpc } from "@/lib/trpc";
 
 export default function TripScreen() {
-  const { crowdReports, endTrip } = useUrbico();
+  const { crowdReports, activeRoute, endTrip } = useUrbico();
   const latestCrowd = crowdReports.at(-1);
+  const lineId = activeRoute?.line?.id ?? null;
+
+  // FIX: antes este card só mostrava o ÚLTIMO relato feito pelo próprio
+  // usuário (`crowdReports` local) - nunca a agregação de relatos de outras
+  // pessoas, mesmo o backend já oferecendo isso (`crowdReports.recent`,
+  // usado só no envio via app/crowd-report.tsx, nunca na exibição). Agora,
+  // com uma linha ativa, mostra a lotação combinada recente da linha;
+  // sem linha ativa, mantém o fallback local de antes.
+  const crowdSummaryQuery = trpc.crowdReports.recent.useQuery(
+    { lineId: lineId ?? 0 },
+    { enabled: !!lineId, refetchInterval: 60_000 },
+  );
+  const aggregatedLevel = crowdSummaryQuery.data?.level ?? null;
+  const aggregatedCount = crowdSummaryQuery.data?.totalReports ?? 0;
+
   const shareTrip = async () => {
     await Share.share({ message: "Estou acompanhando uma viagem pelo Urbico. Acompanhe meu status pelo aplicativo." });
   };
   const finish = () => { endTrip(); router.replace("/"); };
+
+  const crowdTitle = lineId
+    ? aggregatedLevel ?? (crowdSummaryQuery.isLoading ? "Consultando…" : "Sem relatos recentes")
+    : latestCrowd ?? "Não informada";
+  const crowdHint = lineId
+    ? aggregatedCount > 0
+      ? `Baseado em ${aggregatedCount} relato${aggregatedCount === 1 ? "" : "s"} recente${aggregatedCount === 1 ? "" : "s"} desta linha`
+      : "Envie um relato para começar a combinação"
+    : latestCrowd
+      ? "Baseado no seu último relato"
+      : "Envie um relato anônimo";
 
   return (
     <ScreenContainer>
@@ -20,7 +47,7 @@ export default function TripScreen() {
         <View style={styles.header}><Pressable onPress={() => router.back()} style={({ pressed }) => [styles.back, pressed && styles.pressed]}><MaterialIcons name="arrow-back" size={22} color={colors.text} /></Pressable><Text style={styles.title}>Minha viagem</Text><Pressable onPress={() => void shareTrip()} style={({ pressed }) => [styles.back, pressed && styles.pressed]}><MaterialIcons name="share" size={21} color={colors.text} /></Pressable></View>
         <InfoCard style={styles.tripCard}><View style={styles.busBox}><MaterialIcons name="directions-bus" size={28} color={colors.blue} /></View><View style={{ flex: 1 }}><Text style={styles.tripTitle}>Preparando acompanhamento</Text><Text style={styles.tripSubtitle}>A linha e o destino aparecem assim que a viagem for identificada.</Text></View></InfoCard>
         <InfoCard style={styles.nextCard}><Text style={styles.sectionLabel}>PRÓXIMA PARADA</Text><Text style={styles.nextTitle}>Aguardando sua rota</Text><Text style={styles.nextText}>O Norby avisará sobre a próxima parada quando tivermos posição, trajeto e previsão disponíveis.</Text><View style={styles.timeline}><View style={styles.activeLine} /><View style={styles.timelineDotActive} /><View style={[styles.timelineDot, { top: 71 }]} /><View style={[styles.timelineDot, { top: 111 }]} /><View style={[styles.timelineDot, { top: 151 }]} /><View style={styles.timelineCopy}><Text style={styles.timelineHeadline}>Acompanhamento iniciado</Text><Text style={styles.timelineBody}>Você receberá atualizações relevantes, sem excesso de notificações.</Text></View></View></InfoCard>
-        <View style={styles.twoCards}><InfoCard style={styles.smallCard}><View style={styles.smallIcon}><MaterialIcons name="groups" size={20} color={colors.amber} /></View><Text style={styles.smallLabel}>LOTAÇÃO ATUAL</Text><Text style={styles.smallTitle}>{latestCrowd ?? "Não informada"}</Text><Text style={styles.smallHint}>{latestCrowd ? "Baseado no seu último relato" : "Envie um relato anônimo"}</Text></InfoCard><InfoCard style={styles.smallCard}><View style={styles.smallIcon}><MaterialIcons name="notifications-active" size={20} color={colors.cyan} /></View><Text style={styles.smallLabel}>NORBY</Text><Text style={styles.smallTitle}>Pronto para ajudar</Text><Text style={styles.smallHint}>Alertas da viagem aparecem aqui.</Text></InfoCard></View>
+        <View style={styles.twoCards}><InfoCard style={styles.smallCard}><View style={styles.smallIcon}><MaterialIcons name="groups" size={20} color={colors.amber} /></View><Text style={styles.smallLabel}>LOTAÇÃO ATUAL</Text><Text style={styles.smallTitle}>{crowdTitle}</Text><Text style={styles.smallHint}>{crowdHint}</Text></InfoCard><InfoCard style={styles.smallCard}><View style={styles.smallIcon}><MaterialIcons name="notifications-active" size={20} color={colors.cyan} /></View><Text style={styles.smallLabel}>NORBY</Text><Text style={styles.smallTitle}>Pronto para ajudar</Text><Text style={styles.smallHint}>Alertas da viagem aparecem aqui.</Text></InfoCard></View>
         <View style={styles.actions}><SecondaryButton label="Relatar lotação" icon="groups" onPress={() => router.push("/crowd-report")} style={{ flex: 1 }} /><SecondaryButton label="Segurança" icon="shield" onPress={() => router.push("/security")} style={{ flex: 1 }} /></View>
         <PrimaryButton label="ENCERRAR VIAGEM" icon="stop-circle" onPress={finish} style={styles.finish} />
       </ScrollView>
