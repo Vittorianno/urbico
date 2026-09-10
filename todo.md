@@ -40,7 +40,7 @@
 - [x] Implementar captação por voz com detecção de pausa (VAD) e encerramento automático de turno.
 - [ ] Integrar ElevenLabs no backend para síntese e reprodução da resposta falada do Norby.
 - [ ] Validar recursos nativos em dispositivo e conexões de mapa, voz, trânsito e alertas.
-- [ ] Implementar monitoramento contínuo no servidor para alertas de saída escolhidos pelo usuário.
+- [x] Implementar monitoramento contínuo no servidor para alertas de saída escolhidos pelo usuário.
 - [x] Solicitar consentimento explícito, controlar retenção e permitir revogação da localização compartilhada com o servidor.
 - [ ] Preparar o projeto para hospedagem contínua antes de ativar o monitoramento de alertas em produção.
 - [x] Substituir o autocomplete do Google Places por geocodificação e sugestões de endereço do GraphHopper.
@@ -72,3 +72,6 @@
 - [x] Tornar o teste de fallback manual determinístico, sem depender de httpbin ou outra rede externa.
 - [x] Confirmar o fluxo de envio do Norby e investigar erros operacionais disponíveis.
 - [x] Sincronizar as correções finais no GitHub e salvar checkpoint.
+
+- [x] Migrar a autenticação do protocolo OAuth da Manus para Supabase Auth (backend + tela de login/cadastro no app).
+- [x] Exibir a agregação colaborativa de lotação (não só o próprio relato) nas telas de viagem e de detalhes da linha.
