@@ -18,7 +18,7 @@ Stack: **Expo SDK 57** (React Native 0.86 + React 19.2, Nova Arquitetura),
 - [Mapas, geocodificação e rotas (MapLibre / Pelias / Valhalla)](#mapas-geocodificação-e-rotas-maplibre--pelias--valhalla)
 - [SPTrans (Olho Vivo)](#sptrans-olho-vivo)
 - [Norby / Ollama](#norby--ollama)
-- [Autenticação — leia antes de publicar](#autenticação--leia-antes-de-publicar)
+- [Autenticação (Supabase Auth)](#autenticação-supabase-auth)
 - [Execução Web](#execução-web)
 - [Execução Android (Expo Go / dev client)](#execução-android-expo-go--dev-client)
 - [Desenvolvendo direto no celular (Termux)](#desenvolvendo-direto-no-celular-termux)
@@ -32,6 +32,7 @@ Stack: **Expo SDK 57** (React Native 0.86 + React 19.2, Nova Arquitetura),
 - Node.js 20+
 - [pnpm](https://pnpm.io/) 9+ (`corepack enable` já resolve a versão certa via `packageManager` no `package.json`)
 - Um banco MySQL acessível (local via Docker, ou um serviço gerenciado) — opcional para rodar o app, obrigatório para persistência real
+- Um projeto no [Supabase](https://supabase.com/) (camada gratuita cobre o uso de Auth do Urbico) — obrigatório para login
 - Para build Android: conta na [Expo/EAS](https://expo.dev/) e `eas-cli` (`npm i -g eas-cli` ou `npx eas-cli`)
 
 ## Instalação
@@ -64,14 +65,17 @@ Resumo por categoria:
 |---|---|---|
 | `PORT` | Não | Usa 3000, ou a próxima porta livre |
 | `DATABASE_URL` | Não* | App inicia sem persistência: sem login salvo, sem alertas de saída, sem relatos de lotação |
-| `JWT_SECRET` | Sim, para autenticação funcionar | Sessões não podem ser assinadas/verificadas |
-| `OAUTH_SERVER_URL`, `VITE_APP_ID`, `VITE_OAUTH_PORTAL_URL`, `OWNER_OPEN_ID`, `OWNER_NAME` | Sim, para login | Ver [Autenticação](#autenticação--leia-antes-de-publicar) — hoje dependem de um servidor OAuth específico do Manus |
+| `JWT_SECRET` | Sim, para autenticação funcionar | Sessões do Urbico não podem ser assinadas/verificadas |
+| `SUPABASE_URL`, `SUPABASE_ANON_KEY` | Sim, para login | Ver [Autenticação](#autenticação-supabase-auth) |
+| `OWNER_OPEN_ID` | Não | Ninguém recebe o papel "admin" automaticamente |
 | `SPTRANS_TOKEN` | Sim, para dados de ônibus | Consultas de linha/parada/veículo falham com erro tratado (não derruba o app) |
 | `PELIAS_BASE_URL` | Não | Busca automática de endereço fica indisponível; endereço pode ser digitado manualmente |
 | `VALHALLA_BASE_URL` | Não | Cálculo de rota a pé fica indisponível |
 | `OLLAMA_BASE_URL`, `OLLAMA_MODEL` | Não | Norby usa respostas locais por regras em vez de um modelo de linguagem |
+| `CRON_SECRET` | Não | Endpoint de cron HTTP externo dos alertas fica desativado (o agendador interno continua funcionando normalmente) |
 | `BUILT_IN_FORGE_API_URL`, `BUILT_IN_FORGE_API_KEY` | Não | Só afeta recursos legados do Manus não usados pelo Urbico hoje (ver seção final) |
 | `EXPO_PUBLIC_API_BASE_URL` | Recomendado para build nativo/produção | Em dev web é derivada do hostname; sem valor explícito, builds nativos não sabem onde está a API |
+| `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY` | Sim, para login | O app não consegue chamar o Supabase para login/cadastro |
 
 *Tecnicamente opcional (o servidor não derruba sem ela), mas praticamente
 obrigatória — sem banco a maior parte dos recursos do produto fica inerte.
@@ -106,6 +110,12 @@ Sem `DATABASE_URL` configurado, todas as funções em `server/db.ts` degradam
 graciosamente (retornam vazio/null ou avisam no console) em vez de derrubar o
 processo.
 
+**Nota sobre o Supabase**: o projeto Supabase é usado só para **Auth**
+(identidade/login) — os dados do produto (favoritos, agenda, alertas de
+saída, relatos de lotação) continuam no MySQL/Drizzle de sempre. Não há
+migração de banco em andamento; é deliberado, para não trocar duas
+arquiteturas ao mesmo tempo (ver `docs/AUDIT-REPORT.md`, Fase 11).
+
 ## Mapas, geocodificação e rotas (MapLibre / Pelias / Valhalla)
 
 - **Mapa**: [MapLibre](https://maplibre.org/) nativo (`@maplibre/maplibre-react-native`) e web (estilo aberto [OpenFreeMap](https://openfreemap.org/), sem chave de API). Não há dependência do Google Maps.
@@ -130,32 +140,48 @@ O Norby tenta, nesta ordem:
 1. Um modelo local via [Ollama](https://ollama.com/) (`OLLAMA_BASE_URL` + `OLLAMA_MODEL`), se configurado.
 2. Se o Ollama não estiver configurado ou a chamada falhar por qualquer motivo, cai para respostas locais baseadas em regras (`lib/urbico-logic.ts`) — o app nunca fica sem resposta, e nunca depende de um provedor de IA hospedado externo.
 
-## Autenticação — leia antes de publicar
+## Autenticação (Supabase Auth)
 
-**Importante**: a autenticação atual (`server/_core/sdk.ts`,
-`server/_core/oauth.ts`) fala com um servidor OAuth que segue o protocolo
-específico da plataforma Manus (endpoints como
-`/webdev.v1.WebDevAuthPublicService/ExchangeToken`) — **não** é OAuth padrão
-do Google, Apple ou GitHub. Isso significa que, para o login funcionar fora
-do ambiente onde esse servidor existir, uma de duas coisas precisa acontecer:
+A autenticação usa o [Supabase Auth](https://supabase.com/auth) como
+provedor de identidade independente — substitui o protocolo OAuth
+proprietário da plataforma Manus que o projeto usava antes (histórico em
+`docs/AUDIT-REPORT.md`, item "C.4 OAuth incompatível").
 
-- você mantém acesso a um servidor compatível com esse protocolo (por
-  exemplo, se sua conta/projeto no Manus continuar ativo e você só estiver
-  hospedando o **app** em outro lugar); ou
-- a autenticação é substituída por um provedor independente (e-mail/senha
-  próprio, ou OAuth padrão de Google/Apple/GitHub).
+**Como funciona:**
 
-Essa substituição não foi feita neste momento porque é uma decisão de
-produto (qual provedor, qual fluxo de cadastro) que precisa ser sua — não
-algo para eu escolher unilateralmente em nome do projeto. O restante do
-sistema (banco, tRPC, telas) não depende de detalhes do Manus e funciona
-igual com qualquer backend de auth que emita um cookie/token de sessão
-compatível com o formato já usado (`shared/const.ts` → `COOKIE_NAME`).
+1. O app (`@supabase/supabase-js` no cliente) faz login/cadastro **direto**
+   contra o Supabase, usando `EXPO_PUBLIC_SUPABASE_URL` +
+   `EXPO_PUBLIC_SUPABASE_ANON_KEY`. O backend não participa dessa etapa.
+2. O app troca o access token do Supabase por uma sessão própria do Urbico
+   em `POST /api/auth/session` (header `Authorization: Bearer <token>`). O
+   backend (`server/_core/supabaseAuth.ts`) confirma o token chamando
+   `GET /auth/v1/user` no projeto Supabase — não precisa da chave "service
+   role" nem de nenhum segredo além da chave pública anon.
+3. O backend sincroniza o usuário na tabela `users` do MySQL (mesma tabela
+   de sempre; `openId` agora no formato `supabase:<uuid>`) e assina o cookie
+   de sessão do Urbico (`app_session_id`, `JWT_SECRET`) — mecanismo,
+   duração (1 ano) e demais rotas (`GET /api/auth/me`,
+   `POST /api/auth/logout`) não mudaram.
+
+**Configuração necessária (manual, uma vez):**
+
+- Crie um projeto no [Supabase](https://supabase.com/dashboard) (ou reuse um existente).
+- Em **Authentication → Providers**, habilite o método de login desejado
+  (e-mail/senha é o mais simples para começar; Google/Apple também
+  funcionam sem mudar nada no backend, já que o app fala só com o
+  Supabase para login).
+- Copie **Project URL** e a chave **anon/publishable** em
+  **Project Settings → API** para `SUPABASE_URL`/`SUPABASE_ANON_KEY`
+  (backend) e `EXPO_PUBLIC_SUPABASE_URL`/`EXPO_PUBLIC_SUPABASE_ANON_KEY`
+  (cliente) no `.env`.
+- Depois do primeiro cadastro real, consulte a tabela `users` do MySQL
+  para pegar o `openId` (`supabase:<uuid>`) do usuário que deve ser
+  administrador e configure `OWNER_OPEN_ID` com esse valor.
 
 O modo de desenvolvimento não expõe nenhum atalho de autenticação sem
-segurança: sem `OAUTH_SERVER_URL`/`JWT_SECRET` configurados, o login
-simplesmente não funciona (falha de forma controlada, sem abrir uma porta
-insegura).
+segurança: sem `SUPABASE_URL`/`SUPABASE_ANON_KEY`/`JWT_SECRET` configurados,
+o login simplesmente não funciona (falha de forma controlada, sem abrir uma
+porta insegura).
 
 ## Execução Web
 
@@ -339,6 +365,9 @@ Urbico usa hoje**:
 - `heartbeat.ts` — agendamento de cron jobs via Manus (substituído, para os
   alertas de saída, pelo agendador interno em `server/_core/index.ts`)
 - `notification.ts` (+ o endpoint `system.notifyOwner` em `server/_core/systemRouter.ts`) — notificação ao dono do projeto via Manus
+- `types/manusTypes.ts` — tipos do protocolo OAuth do Manus (`ExchangeToken`,
+  `GetUserInfo`); a autenticação em si já não depende mais deles (ver
+  [Autenticação](#autenticação-supabase-auth)), o arquivo só ficou sem uso
 
 Nenhum deles foi removido nesta rodada: uma tentativa anterior de remover um
 arquivo aparentemente não utilizado (`lib/transit-engine.ts`) quebrou um
