@@ -2,11 +2,6 @@ import { Platform } from "react-native";
 import { getApiBaseUrl } from "@/constants/oauth";
 import * as Auth from "./auth";
 
-type ApiResponse<T> = {
-  data?: T;
-  error?: string;
-};
-
 export async function apiCall<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -66,26 +61,6 @@ export async function apiCall<T>(endpoint: string, options: RequestInit = {}): P
   }
 }
 
-// OAuth callback handler - exchange code for session token
-// Calls /api/oauth/mobile endpoint which returns JSON with app_session_id and user
-export async function exchangeOAuthCode(
-  code: string,
-  state: string,
-): Promise<{ sessionToken: string; user: any }> {
-  // Use GET with query params
-  const params = new URLSearchParams({ code, state });
-  const endpoint = `/api/oauth/mobile?${params.toString()}`;
-  const result = await apiCall<{ app_session_id: string; user: any }>(endpoint);
-
-  // Convert app_session_id to sessionToken for compatibility
-  const sessionToken = result.app_session_id;
-
-  return {
-    sessionToken,
-    user: result.user,
-  };
-}
-
 // Logout
 export async function logout(): Promise<void> {
   await apiCall<void>("/api/auth/logout", {
@@ -112,7 +87,9 @@ export async function getMe(): Promise<{
 }
 
 // Establish session cookie on the backend (3000-xxx domain)
-// Called after receiving token via postMessage to get a proper Set-Cookie from the backend
+// Called after receiving a Supabase access token from app/login.tsx, to get
+// a proper Set-Cookie response from the backend and (on web) let the
+// browser store it.
 export async function establishSession(token: string): Promise<boolean> {
   try {
     const baseUrl = getApiBaseUrl();
