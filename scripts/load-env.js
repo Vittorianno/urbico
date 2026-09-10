@@ -1,6 +1,6 @@
 /**
  * Custom environment loader that prioritizes system environment variables
- * over .env file values. This ensures that Manus platform-injected variables
+ * over .env file values. This ensures that platform-injected variables
  * are not overridden by placeholder values in .env
  */
 import fs from "fs";
@@ -33,13 +33,12 @@ if (fs.existsSync(envPath)) {
   });
 }
 
-// Map system variables to Expo public variables
+// Map backend variables to their Expo public (client-safe) equivalent, so
+// setting the backend var once in .env is enough - no need to duplicate the
+// same public value under two different names.
 const mappings = {
-  VITE_APP_ID: "EXPO_PUBLIC_APP_ID",
-  VITE_OAUTH_PORTAL_URL: "EXPO_PUBLIC_OAUTH_PORTAL_URL",
-  OAUTH_SERVER_URL: "EXPO_PUBLIC_OAUTH_SERVER_URL",
-  OWNER_OPEN_ID: "EXPO_PUBLIC_OWNER_OPEN_ID",
-  OWNER_NAME: "EXPO_PUBLIC_OWNER_NAME",
+  SUPABASE_URL: "EXPO_PUBLIC_SUPABASE_URL",
+  SUPABASE_ANON_KEY: "EXPO_PUBLIC_SUPABASE_ANON_KEY",
 };
 
 for (const [systemVar, expoVar] of Object.entries(mappings)) {
