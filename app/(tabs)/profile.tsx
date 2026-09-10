@@ -7,13 +7,9 @@ import { colors, SectionTitle } from "@/components/urbico-ui";
 import { useUrbico } from "@/lib/urbico-context";
 import { enableTravelNotifications } from "@/lib/notifications";
 import { useAuth } from "@/hooks/use-auth";
-import { startOAuthLogin } from "@/constants/oauth";
 
 export default function ProfileScreen() {
   const { notificationsEnabled, setNotificationsEnabled, voiceEnabled, setVoiceEnabled } = useUrbico();
-  // FIX: a tela nunca usava useAuth() — mostrava sempre "Sua conta" fixo,
-  // mesmo com toda a infraestrutura de login OAuth já implementada, e não
-  // havia como sair da conta pela interface.
   const { user, isAuthenticated, logout } = useAuth();
   const changeNotificationPreference = async (enabled: boolean) => {
     if (!enabled) {
@@ -31,7 +27,7 @@ export default function ProfileScreen() {
         { text: "Sair", style: "destructive", onPress: () => void logout() },
       ]);
     } else {
-      void startOAuthLogin();
+      router.push("/login");
     }
   };
   return <ScreenContainer><ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}><View style={styles.top}><Text style={styles.title}>Perfil</Text><MaterialIcons name="settings" size={22} color={colors.text} /></View><Pressable onPress={handleAccountPress} style={({ pressed }) => [styles.account, pressed && styles.pressed]}><View style={styles.avatar}><MaterialIcons name="person" size={38} color={colors.cyan} /></View><View style={{ flex: 1 }}><Text style={styles.accountName}>{isAuthenticated ? (user?.name ?? "Sua conta") : "Fazer login"}</Text><Text style={styles.accountEmail}>{isAuthenticated ? (user?.email ?? "Personalize suas preferências") : "Entre para sincronizar seus dados"}</Text>{isAuthenticated ? <View style={styles.plan}><Text style={styles.planText}>Plano Free</Text></View> : null}</View>{isAuthenticated ? <MaterialIcons name="logout" size={20} color={colors.muted} /> : <MaterialIcons name="chevron-right" size={21} color={colors.muted} />}</Pressable><SectionTitle title="Preferências" /><View style={styles.list}><ProfileItem icon="alt-route" title="Rotas" subtitle="Opções de deslocamento" onPress={() => router.push("/routes")} /><ProfileItem icon="groups" title="Lotação" subtitle="Avisar quando estiver alta" onPress={() => router.push("/crowd-report")} /><View style={styles.switchItem}><View style={styles.itemIcon}><MaterialIcons name="notifications" size={21} color={colors.text} /></View><View style={{ flex: 1 }}><Text style={styles.itemTitle}>Notificações</Text><Text style={styles.itemSubtitle}>{notificationsEnabled ? "Ativadas" : "Desativadas"}</Text></View><Switch value={notificationsEnabled} onValueChange={(value) => void changeNotificationPreference(value)} trackColor={{ false: "#33485C", true: colors.blue }} thumbColor="#FFFFFF" /></View><View style={styles.switchItem}><View style={styles.itemIcon}><MaterialIcons name="mic" size={21} color={colors.text} /></View><View style={{ flex: 1 }}><Text style={styles.itemTitle}>Voz do Norby</Text><Text style={styles.itemSubtitle}>{voiceEnabled ? "Pronta para usar" : "Desativada"}</Text></View><Switch value={voiceEnabled} onValueChange={setVoiceEnabled} trackColor={{ false: "#33485C", true: colors.blue }} thumbColor="#FFFFFF" /></View></View><SectionTitle title="Meus dados" /><View style={styles.list}><ProfileItem icon="history" title="Histórico de viagens" subtitle="Consulte atividades recentes" onPress={() => router.push("/history")} /><ProfileItem icon="place" title="Locais salvos" subtitle="Casa, trabalho e favoritos" onPress={() => router.push("/favorites")} /><ProfileItem icon="event" title="Agenda" subtitle="Organize seus compromissos" onPress={() => router.push("/agenda")} /></View><SectionTitle title="Segurança e privacidade" /><View style={styles.list}><ProfileItem icon="shield" title="Segurança" subtitle="Compartilhamento e emergência" onPress={() => router.push("/security")} /><ProfileItem icon="privacy-tip" title="Privacidade" subtitle="Controle seus dados locais" onPress={() => router.push("/settings")} /></View></ScrollView></ScreenContainer>;
