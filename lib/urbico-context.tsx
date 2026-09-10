@@ -31,6 +31,12 @@ export type TransitContextLine = { id: number; label: string; destination: strin
 export type ActiveRoute = { origin: RoutePlace; destination: RoutePlace; points: number[][]; distanceMeters: number; durationSeconds: number; line: TransitContextLine | null };
 export type CurrentLocation = { latitude: number; longitude: number; accuracy: number | null; capturedAt: number };
 
+export type TrustedContact = {
+  id: string;
+  name: string;
+  phone: string;
+};
+
 export type ChatMessage = {
   id: string;
   role: "assistant" | "user";
@@ -60,6 +66,8 @@ type UrbicoState = {
   activeRoute: ActiveRoute | null;
   currentLocation: CurrentLocation | null;
   locationSharingEnabled: boolean;
+  trustedContacts: TrustedContact[];
+  safeModeEnabled: boolean;
   addFavorite: (favorite: Omit<Favorite, "id">) => void;
   removeFavorite: (id: string) => void;
   addAppointment: (appointment: Omit<Appointment, "id">) => void;
@@ -74,6 +82,9 @@ type UrbicoState = {
   setActiveRoute: (route: ActiveRoute | null) => void;
   setCurrentLocation: (location: CurrentLocation | null) => void;
   setLocationSharingEnabled: (enabled: boolean) => void;
+  addTrustedContact: (contact: Omit<TrustedContact, "id">) => void;
+  removeTrustedContact: (id: string) => void;
+  setSafeModeEnabled: (enabled: boolean) => void;
 };
 
 const STORAGE_KEY = "urbico.local-state.v1";
@@ -115,13 +126,15 @@ export function UrbicoProvider({ children }: { children: ReactNode }) {
   const [activeRoute, setActiveRoute] = useState<ActiveRoute | null>(null);
   const [currentLocation, setCurrentLocation] = useState<CurrentLocation | null>(null);
   const [locationSharingEnabled, setLocationSharingEnabled] = useState(false);
+  const [trustedContacts, setTrustedContacts] = useState<TrustedContact[]>([]);
+  const [safeModeEnabled, setSafeModeEnabled] = useState(false);
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
     AsyncStorage.getItem(STORAGE_KEY)
       .then((stored) => {
         if (!stored) return;
-        const parsed = JSON.parse(stored) as Partial<Omit<UrbicoState, "addFavorite" | "removeFavorite" | "addAppointment" | "removeAppointment" | "sendMessage" | "addNorbyMessage" | "addCrowdReport" | "startTrip" | "endTrip" | "setNotificationsEnabled" | "setVoiceEnabled" | "setActiveRoute" | "setCurrentLocation" | "setLocationSharingEnabled">>;
+        const parsed = JSON.parse(stored) as Partial<Omit<UrbicoState, "addFavorite" | "removeFavorite" | "addAppointment" | "removeAppointment" | "sendMessage" | "addNorbyMessage" | "addCrowdReport" | "startTrip" | "endTrip" | "setNotificationsEnabled" | "setVoiceEnabled" | "setActiveRoute" | "setCurrentLocation" | "setLocationSharingEnabled" | "addTrustedContact" | "removeTrustedContact" | "setSafeModeEnabled">>;
         if (parsed.favorites) setFavorites(parsed.favorites);
         if (parsed.appointments) setAppointments(parsed.appointments);
         if (parsed.messages) {
@@ -146,6 +159,8 @@ export function UrbicoProvider({ children }: { children: ReactNode }) {
         if (parsed.activeRoute) setActiveRoute(parsed.activeRoute);
         if (parsed.currentLocation) setCurrentLocation(parsed.currentLocation);
         if (typeof parsed.locationSharingEnabled === "boolean") setLocationSharingEnabled(parsed.locationSharingEnabled);
+        if (parsed.trustedContacts) setTrustedContacts(parsed.trustedContacts);
+        if (typeof parsed.safeModeEnabled === "boolean") setSafeModeEnabled(parsed.safeModeEnabled);
       })
       .catch(() => undefined)
       .finally(() => setHydrated(true));
@@ -155,9 +170,9 @@ export function UrbicoProvider({ children }: { children: ReactNode }) {
     if (!hydrated) return;
     AsyncStorage.setItem(
       STORAGE_KEY,
-      JSON.stringify({ favorites, appointments, messages, crowdReports, tripHistory, isTripActive, notificationsEnabled, voiceEnabled, activeRoute, currentLocation, locationSharingEnabled }),
+      JSON.stringify({ favorites, appointments, messages, crowdReports, tripHistory, isTripActive, notificationsEnabled, voiceEnabled, activeRoute, currentLocation, locationSharingEnabled, trustedContacts, safeModeEnabled }),
     ).catch(() => undefined);
-  }, [activeRoute, appointments, crowdReports, currentLocation, favorites, hydrated, isTripActive, locationSharingEnabled, messages, notificationsEnabled, tripHistory, voiceEnabled]);
+  }, [activeRoute, appointments, crowdReports, currentLocation, favorites, hydrated, isTripActive, locationSharingEnabled, messages, notificationsEnabled, safeModeEnabled, tripHistory, trustedContacts, voiceEnabled]);
 
   const value = useMemo<UrbicoState>(
     () => ({
@@ -172,6 +187,8 @@ export function UrbicoProvider({ children }: { children: ReactNode }) {
       activeRoute,
       currentLocation,
       locationSharingEnabled,
+      trustedContacts,
+      safeModeEnabled,
       addFavorite: (favorite) => setFavorites((current) => [...current, { ...favorite, id: `favorite-${Date.now()}` }]),
       removeFavorite: (id) => setFavorites((current) => current.filter((favorite) => favorite.id !== id)),
       addAppointment: (appointment) => setAppointments((current) => [...current, { ...appointment, id: `appointment-${Date.now()}` }]),
@@ -200,8 +217,11 @@ export function UrbicoProvider({ children }: { children: ReactNode }) {
       setActiveRoute,
       setCurrentLocation,
       setLocationSharingEnabled,
+      addTrustedContact: (contact) => setTrustedContacts((current) => [...current, { ...contact, id: `contact-${Date.now()}` }]),
+      removeTrustedContact: (id) => setTrustedContacts((current) => current.filter((contact) => contact.id !== id)),
+      setSafeModeEnabled,
     }),
-    [activeRoute, appointments, crowdReports, currentLocation, favorites, isTripActive, locationSharingEnabled, messages, notificationsEnabled, tripHistory, voiceEnabled],
+    [activeRoute, appointments, crowdReports, currentLocation, favorites, isTripActive, locationSharingEnabled, messages, notificationsEnabled, safeModeEnabled, tripHistory, trustedContacts, voiceEnabled],
   );
 
   return <UrbicoContext.Provider value={value}>{children}</UrbicoContext.Provider>;
