@@ -1,4 +1,4 @@
-import { and, desc, eq, gt, gte, isNull, sql } from "drizzle-orm";
+import { and, count, desc, eq, gt, gte, isNull, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { crowdReports, departureAlerts, InsertDepartureAlert, InsertUser, users } from "../drizzle/schema";
 import { ENV } from "./_core/env";
@@ -183,5 +183,50 @@ export async function getRecentCrowdSummary(lineId: number, windowMinutes = 30) 
     totalReports,
     // Índice na escala Vazio→Lotado, útil para ordenar/exibir sem repetir a lista de níveis no cliente.
     levelIndex: CROWD_LEVEL_ORDER.indexOf(topLevel),
+  };
+}
+
+/**
+ * Visão geral para o painel administrativo (Fase 12). Só números reais,
+ * derivados das próprias tabelas — nada mockado. Se o banco não estiver
+ * disponível, devolve tudo zerado em vez de lançar, para o painel degradar
+ * graciosamente em vez de quebrar a tela.
+ */
+export async function getAdminOverview() {
+  const db = await getDb();
+  const empty = {
+    totalUsers: 0,
+    adminUsers: 0,
+    activeUsersLast7d: 0,
+    armedDepartureAlerts: 0,
+    crowdReportsLast24h: 0,
+    topLinesLast24h: [] as { lineId: number; reports: number }[],
+  };
+  if (!db) return empty;
+
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+  const [[userTotals], [activeUsers], [armedAlerts], [crowdTotals], topLines] = await Promise.all([
+    db.select({ total: count(), admins: sql<number>`sum(case when ${users.role} = 'admin' then 1 else 0 end)` }).from(users),
+    db.select({ total: count() }).from(users).where(gte(users.lastSignedIn, sevenDaysAgo)),
+    db.select({ total: count() }).from(departureAlerts).where(eq(departureAlerts.isEnabled, true)),
+    db.select({ total: count() }).from(crowdReports).where(gte(crowdReports.createdAt, twentyFourHoursAgo)),
+    db
+      .select({ lineId: crowdReports.lineId, reports: count() })
+      .from(crowdReports)
+      .where(gte(crowdReports.createdAt, twentyFourHoursAgo))
+      .groupBy(crowdReports.lineId)
+      .orderBy(desc(count()))
+      .limit(5),
+  ]);
+
+  return {
+    totalUsers: Number(userTotals?.total ?? 0),
+    adminUsers: Number(userTotals?.admins ?? 0),
+    activeUsersLast7d: Number(activeUsers?.total ?? 0),
+    armedDepartureAlerts: Number(armedAlerts?.total ?? 0),
+    crowdReportsLast24h: Number(crowdTotals?.total ?? 0),
+    topLinesLast24h: topLines.map((row) => ({ lineId: row.lineId, reports: Number(row.reports) })),
   };
 }
