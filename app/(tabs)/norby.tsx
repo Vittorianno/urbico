@@ -1,5 +1,5 @@
 import { router } from "expo-router";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Alert, FlatList, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from "expo-speech-recognition";
 
@@ -7,6 +7,7 @@ import { ScreenContainer } from "@/components/screen-container";
 import { UrbicoMap } from "@/components/urbico-map";
 import { colors } from "@/components/urbico-ui";
 import { useUrbico } from "@/lib/urbico-context";
+import { parseCrowdLevelFromText } from "@/lib/urbico-logic";
 import { speakNorby, stopNorbyVoice } from "@/lib/norby-voice";
 import { trpc } from "@/lib/trpc";
 
@@ -38,7 +39,7 @@ function NorbyAvatar({ large = false }: { large?: boolean }) {
 }
 
 export default function NorbyScreen() {
-  const { messages, sendMessage, addNorbyMessage, voiceEnabled, activeRoute, currentLocation, startTrip } = useUrbico();
+  const { messages, sendMessage, addNorbyMessage, addCrowdReport, voiceEnabled, activeRoute, currentLocation, startTrip } = useUrbico();
   const [draft, setDraft] = useState("");
   const [isListening, setIsListening] = useState(false);
   const [showConversation, setShowConversation] = useState(true);
@@ -47,6 +48,28 @@ export default function NorbyScreen() {
   const completedTurnRef = useRef(false);
   const listeningRef = useRef(false);
   const chatMutation = trpc.norby.chat.useMutation();
+  const crowdSubmitMutation = trpc.crowdReports.submit.useMutation();
+
+  // FIX: a lotação não tem mais uma tela dedicada (app/crowd-report.tsx,
+  // removida) — agora sou eu quem pergunta durante a viagem, por voz ou
+  // texto, e computo a resposta. Assim que uma linha fica ativa numa
+  // viagem, pergunto uma vez (por linha) e fico esperando a resposta; a
+  // pergunta aparece no chat mesmo que a pessoa esteja em outra aba no
+  // momento, e ela só precisa responder normalmente ("tá cheio", "vazio"...)
+  // na próxima vez que falar comigo.
+  const crowdAskedLineRef = useRef<number | null>(null);
+  const awaitingCrowdRef = useRef(false);
+  useEffect(() => {
+    const lineId = activeRoute?.line?.id ?? null;
+    const lineLabel = activeRoute?.line?.label;
+    if (!lineId || crowdAskedLineRef.current === lineId) return;
+    crowdAskedLineRef.current = lineId;
+    awaitingCrowdRef.current = true;
+    const question = `Como está a lotação do ônibus da linha ${lineLabel} agora? Me diga se está vazio, com poucos lugares, normal, cheio ou lotado.`;
+    addNorbyMessage(question);
+    if (voiceEnabled) void speakNorby(question);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeRoute?.line?.id]);
 
   const askNorby = async (question: string) => {
     const message = question.trim();
@@ -54,6 +77,30 @@ export default function NorbyScreen() {
     sendMessage(message);
     setDraft("");
     setShowConversation(true);
+
+    if (awaitingCrowdRef.current) {
+      const level = parseCrowdLevelFromText(message);
+      if (level) {
+        awaitingCrowdRef.current = false;
+        addCrowdReport(level);
+        const lineId = activeRoute?.line?.id ?? null;
+        if (lineId) {
+          try {
+            await crowdSubmitMutation.mutateAsync({ lineId, level });
+          } catch {
+            // Segue como relato só local se o envio ao servidor falhar.
+          }
+        }
+        const confirmation = `Obrigado! Marquei a lotação como "${level}". Isso ajuda outras pessoas que forem pegar essa linha agora.`;
+        addNorbyMessage(confirmation);
+        if (voiceEnabled) void speakNorby(confirmation);
+        return;
+      }
+      // Não reconheci como resposta sobre lotação — paro de esperar por ela
+      // especificamente e sigo a mensagem pelo fluxo normal do chat abaixo.
+      awaitingCrowdRef.current = false;
+    }
+
     try {
       const response = await chatMutation.mutateAsync({ message });
       addNorbyMessage(response.message);
