@@ -17,8 +17,8 @@
 - [x] Integrar mapa e roteamento somente após receber chaves rotacionadas e restritas por canal seguro.
 - [x] Implementar a IA remota do Norby no backend após configurar uma credencial segura.
 - [ ] Implementar reconhecimento de voz, síntese remota e notificações de viagem após configurações seguras.
-- [ ] Implementar compartilhamento nativo de viagem e contato de confiança.
-- [ ] Desenvolver o aplicativo administrativo separado e métricas operacionais.
+- [x] Implementar compartilhamento nativo de viagem e contato de confiança.
+- [x] Desenvolver o aplicativo administrativo separado e métricas operacionais.
 - [x] Validar tipagem, fluxos de navegação e persistência local.
 - [x] Adaptar a interface para o sistema visual escuro, a hierarquia e os cartões do mockup fornecido.
 - [x] Ajustar a navegação inferior para Início, Mapa, Norby e Perfil, mantendo Rotas como fluxo contextual.
@@ -75,3 +75,4 @@
 
 - [x] Migrar a autenticação do protocolo OAuth da Manus para Supabase Auth (backend + tela de login/cadastro no app).
 - [x] Exibir a agregação colaborativa de lotação (não só o próprio relato) nas telas de viagem e de detalhes da linha.
+- [x] Adicionar painel administrativo mínimo no próprio app (usuários, ativos, alertas, lotação, notificação de teste), restrito a role "admin".
