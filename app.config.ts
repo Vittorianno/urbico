@@ -59,7 +59,15 @@ const config: ExpoConfig = {
   },
   web: {
     bundler: "metro",
-    output: "static",
+    // FIX: "static" fazia o Expo Router pré-renderizar cada rota no
+    // servidor Node (SSR) antes de mandar pro navegador. Como o Urbico é um
+    // app mobile e o preview web é só conveniência de desenvolvimento (sem
+    // necessidade de HTML pré-gerado por rota para SEO), isso só trazia
+    // problemas: código que assume ambiente de navegador (Reanimated usando
+    // requestAnimationFrame, Supabase/AsyncStorage usando window/
+    // localStorage) quebrava ao rodar no Node, onde esses globais não
+    // existem. "single" gera uma SPA pura, 100% client-side, sem esse SSR.
+    output: "single",
     favicon: "./assets/images/favicon.png",
   },
   plugins: [
