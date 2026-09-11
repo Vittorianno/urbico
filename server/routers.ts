@@ -55,12 +55,38 @@ export const appRouter = router({
     })),
     geocode: publicProcedure.input(z.object({ query: z.string().trim().min(2).max(160) })).query(({ input }) => safeIntegration(() => geocode(input.query))),
     suggestAddresses: publicProcedure.input(z.object({ query: z.string().trim().min(2).max(160) })).query(({ input }) => safeIntegration(() => suggestAddresses(input.query))),
-    planWalking: publicProcedure.input(z.object({ origin: z.string().trim().min(2).max(160), destination: z.string().trim().min(2).max(160) })).mutation(async ({ input }) => safeIntegration(async () => {
-      const [origin, destination] = await Promise.all([geocode(input.origin), geocode(input.destination)]);
-      if (!origin || !destination) return null;
-      const route = await planWalkingRoute(origin, destination);
-      return { origin, destination, route };
-    })),
+    // FIX: origin/destination antes eram sempre geocodificados por texto via
+    // Pelias, mesmo quando o cliente já sabia a coordenada exata (favorito
+    // salvo com lat/lng, ou localização atual por GPS) — isso obrigava a
+    // depender do serviço de geocodificação (e podia falhar) mesmo tendo o
+    // dado pronto. Agora origin/destinationLatitude/Longitude são opcionais
+    // e, quando presentes, pulam o geocode() e usam a coordenada diretamente.
+    planWalking: publicProcedure
+      .input(
+        z.object({
+          origin: z.string().trim().min(2).max(160),
+          destination: z.string().trim().min(2).max(160),
+          originLatitude: z.number().min(-90).max(90).optional(),
+          originLongitude: z.number().min(-180).max(180).optional(),
+          destinationLatitude: z.number().min(-90).max(90).optional(),
+          destinationLongitude: z.number().min(-180).max(180).optional(),
+        }),
+      )
+      .mutation(async ({ input }) =>
+        safeIntegration(async () => {
+          const origin =
+            input.originLatitude != null && input.originLongitude != null
+              ? { name: input.origin, address: input.origin, latitude: input.originLatitude, longitude: input.originLongitude }
+              : await geocode(input.origin);
+          const destination =
+            input.destinationLatitude != null && input.destinationLongitude != null
+              ? { name: input.destination, address: input.destination, latitude: input.destinationLatitude, longitude: input.destinationLongitude }
+              : await geocode(input.destination);
+          if (!origin || !destination) return null;
+          const route = await planWalkingRoute(origin, destination);
+          return { origin, destination, route };
+        }),
+      ),
   }),
   norby: router({
     chat: publicProcedure.input(z.object({ message: z.string().trim().min(1).max(700), transportContext: z.string().trim().max(3000).optional() })).mutation(({ input }) => safeIntegration(async () => ({ message: await askNorby(input.message, input.transportContext) }))),
