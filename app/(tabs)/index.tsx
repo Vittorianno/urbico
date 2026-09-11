@@ -9,6 +9,29 @@ import { useUrbico } from "@/lib/urbico-context";
 export default function HomeScreen() {
   const { favorites, isTripActive } = useUrbico();
 
+  // FIX: tocar num favorito ("Casa"/"Trabalho") só abria a tela de Rotas em
+  // branco, obrigando a pessoa a digitar origem e destino manualmente — o
+  // ponto do card salvo era justamente evitar isso. Agora vai direto pra
+  // Rotas já com o destino preenchido (endereço + coordenadas do favorito);
+  // a tela de Rotas usa isso pra também auto-preencher a origem com a
+  // localização atual. Se o favorito ainda não tem endereço configurado
+  // (placeholder "Defina seu endereço", sem coordenadas), leva para editar.
+  const openFavorite = (favorite: (typeof favorites)[number]) => {
+    if (favorite.latitude == null || favorite.longitude == null) {
+      router.push("/favorites");
+      return;
+    }
+    router.push({
+      pathname: "/routes",
+      params: {
+        destination: favorite.address,
+        destinationName: favorite.label,
+        destinationLat: String(favorite.latitude),
+        destinationLng: String(favorite.longitude),
+      },
+    });
+  };
+
   return (
     <ScreenContainer>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
@@ -66,7 +89,7 @@ export default function HomeScreen() {
         <SectionTitle title="Seus lugares" action="Editar" onAction={() => router.push("/favorites")} />
         <View style={styles.favoriteRow}>
           {favorites.slice(0, 2).map((favorite) => (
-            <Pressable key={favorite.id} onPress={() => router.push("/routes")} style={({ pressed }) => [styles.placeCard, pressed && styles.pressed]}>
+            <Pressable key={favorite.id} onPress={() => openFavorite(favorite)} style={({ pressed }) => [styles.placeCard, pressed && styles.pressed]}>
               <View style={styles.placeIcon}><MaterialIcons name={favorite.label === "Trabalho" ? "business-center" : "home"} size={21} color={colors.blue} /></View>
               <Text style={styles.placeLabel}>{favorite.label}</Text>
               <Text numberOfLines={1} style={styles.placeAddress}>{favorite.address}</Text>
