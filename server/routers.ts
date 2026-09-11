@@ -2,7 +2,7 @@ import { COOKIE_NAME } from "../shared/const.js";
 import { z } from "zod";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
-import { publicProcedure, router } from "./_core/trpc";
+import { adminProcedure, publicProcedure, router } from "./_core/trpc";
 import { geocode, planWalkingRoute, suggestAddresses } from "./integrations/open-geospatial";
 import { askNorby } from "./integrations/norby";
 import { getLineStops, getLineVehicles, getStopPredictions, searchLines, searchStops } from "./integrations/sptrans";
@@ -30,6 +30,12 @@ export const appRouter = router({
         success: true,
       } as const;
     }),
+  }),
+  // Painel administrativo mínimo (Fase 12): só números reais agregados das
+  // tabelas existentes. adminProcedure já exige role "admin" (ver
+  // server/_core/trpc.ts) - qualquer outra pessoa recebe 403.
+  admin: router({
+    overview: adminProcedure.query(() => db.getAdminOverview()),
   }),
   transit: router({
     searchLines: publicProcedure.input(z.object({ term: z.string().trim().min(2).max(60) })).query(({ input }) => safeIntegration(() => searchLines(input.term))),
