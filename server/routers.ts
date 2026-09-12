@@ -132,6 +132,12 @@ export const appRouter = router({
       const summary = await db.getRecentCrowdSummary(input.lineId);
       return summary ?? { level: null, totalReports: 0, levelIndex: -1 };
     }),
+    // Mesma agregação de `recent`, mas para várias linhas de uma vez — usada
+    // pela lista de resultados em app/next-buses.tsx para mostrar a lotação
+    // de cada linha sem exigir que a pessoa selecione uma por uma.
+    recentBatch: publicProcedure.input(z.object({ lineIds: z.array(z.number().int().positive()).min(1).max(20) })).query(async ({ input }) => {
+      return db.getRecentCrowdSummaryBatch(input.lineIds);
+    }),
   }),
 });
 
