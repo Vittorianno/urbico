@@ -29,6 +29,12 @@ export function CrowdLevelBadge({
   const size = compact ? 15 : 18;
 
   if (!level) {
+    // FIX: em modo compacto (usado por item numa lista de várias linhas —
+    // ver app/next-buses.tsx) a maioria das linhas não vai ter relato, e
+    // repetir "Sem relatos de lotação recentes" em toda linha da lista
+    // poluiria a tela. Nesse modo simplesmente não mostra nada; a explicação
+    // completa continua aparecendo no card de detalhes (modo não-compacto).
+    if (compact) return null;
     return (
       <View style={styles.row}>
         <MaterialIcons name="help-outline" size={size} color={colors.muted} />
