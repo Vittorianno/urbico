@@ -1,4 +1,4 @@
-import { and, count, desc, eq, gt, gte, isNull, sql } from "drizzle-orm";
+import { and, count, desc, eq, gt, gte, inArray, isNull, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { crowdReports, departureAlerts, InsertDepartureAlert, InsertUser, users } from "../drizzle/schema";
 import { ENV } from "./_core/env";
@@ -184,6 +184,44 @@ export async function getRecentCrowdSummary(lineId: number, windowMinutes = 30) 
     // Índice na escala Vazio→Lotado, útil para ordenar/exibir sem repetir a lista de níveis no cliente.
     levelIndex: CROWD_LEVEL_ORDER.indexOf(topLevel),
   };
+}
+
+/**
+ * Mesma agregação de `getRecentCrowdSummary`, mas para várias linhas de uma
+ * vez (uma única consulta ao banco) — usado pela lista de linhas em
+ * app/next-buses.tsx para mostrar a lotação de cada linha sem precisar
+ * selecionar uma por vez. Linhas sem relatos recentes vêm com valor `null`.
+ */
+export async function getRecentCrowdSummaryBatch(lineIds: number[], windowMinutes = 30) {
+  const result: Record<number, { level: (typeof crowdReports.$inferInsert)["level"]; totalReports: number; levelIndex: number } | null> = {};
+  for (const lineId of lineIds) result[lineId] = null;
+  if (lineIds.length === 0) return result;
+
+  const db = await getDb();
+  if (!db) return result;
+
+  const since = new Date(Date.now() - windowMinutes * 60 * 1000);
+  const rows = await db
+    .select({ lineId: crowdReports.lineId, level: crowdReports.level, count: sql<number>`count(*)`.as("count") })
+    .from(crowdReports)
+    .where(and(inArray(crowdReports.lineId, lineIds), gte(crowdReports.createdAt, since)))
+    .groupBy(crowdReports.lineId, crowdReports.level);
+
+  const byLine = new Map<number, { level: (typeof crowdReports.$inferInsert)["level"]; count: number }[]>();
+  for (const row of rows) {
+    const list = byLine.get(row.lineId) ?? [];
+    list.push({ level: row.level, count: Number(row.count) });
+    byLine.set(row.lineId, list);
+  }
+
+  for (const [lineId, levels] of byLine) {
+    levels.sort((a, b) => b.count - a.count);
+    const top = levels[0];
+    const totalReports = levels.reduce((total, entry) => total + entry.count, 0);
+    result[lineId] = { level: top.level, totalReports, levelIndex: CROWD_LEVEL_ORDER.indexOf(top.level) };
+  }
+
+  return result;
 }
 
 /**
