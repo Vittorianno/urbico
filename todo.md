@@ -7,7 +7,7 @@
 - [x] Criar o planejamento de rotas com origem, destino, alternativas e resumo compreensível.
 - [x] Construir o mapa de mobilidade com estados seguros de dados indisponíveis.
 - [x] Implementar o acompanhamento de viagem e o fluxo de encerramento manual.
-- [x] Criar o fluxo anônimo de relato de lotação.
+- [x] Criar o fluxo anônimo de relato de lotação (coletado pelo Norby por voz/texto durante a viagem, sem tela dedicada — ver app/(tabs)/norby.tsx).
 - [x] Criar a gestão local de favoritos, incluindo casa, trabalho e locais recorrentes.
 - [x] Criar a agenda local de compromissos e o cálculo indicativo do horário de saída.
 - [x] Criar perfil, preferências de notificação, privacidade e configurações do Norby.
@@ -76,3 +76,6 @@
 - [x] Migrar a autenticação do protocolo OAuth da Manus para Supabase Auth (backend + tela de login/cadastro no app).
 - [x] Exibir a agregação colaborativa de lotação (não só o próprio relato) nas telas de viagem e de detalhes da linha.
 - [x] Adicionar painel administrativo mínimo no próprio app (usuários, ativos, alertas, lotação, notificação de teste), restrito a role "admin".
+
+- [x] Tocar num favorito (Home ou Locais salvos) leva direto para Rotas com o destino preenchido, em vez de abrir o formulário em branco.
+- [x] Trocar a exibição de lotação (texto) por pictograma de pessoas, coletado pelo Norby durante a viagem em vez de tela dedicada; lista de linhas em Próximos ônibus mostra a lotação de cada uma.
