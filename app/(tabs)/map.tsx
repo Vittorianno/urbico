@@ -33,7 +33,10 @@ export default function MapScreen() {
     <ScreenContainer>
       <View style={styles.screen}>
         <View style={styles.header}>
-          <View style={styles.headerLeft}><MaterialIcons name="menu" size={23} color={colors.text} /><Text style={styles.headerTitle}>Mapa</Text></View>
+          {/* FIX: o ícone de menu parecia clicável (igual ao da Home, que
+              abre o Perfil), mas não tinha nenhuma ação aqui — agora leva
+              para /profile, consistente com o resto do app. */}
+          <Pressable accessibilityLabel="Abrir perfil" onPress={() => router.push("/profile")} style={styles.headerLeft}><MaterialIcons name="menu" size={23} color={colors.text} /><Text style={styles.headerTitle}>Mapa</Text></Pressable>
           <View style={styles.headerActions}><Pressable accessibilityLabel="Planejar rota" onPress={() => router.push("/routes")}><MaterialIcons name="search" size={22} color={colors.text} /></Pressable><MaterialIcons name="layers" size={21} color={colors.text} /></View>
         </View>
 
