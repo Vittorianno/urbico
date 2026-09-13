@@ -62,3 +62,24 @@ export const crowdReports = mysqlTable("crowd_reports", {
 
 export type CrowdReport = typeof crowdReports.$inferSelect;
 export type InsertCrowdReport = typeof crowdReports.$inferInsert;
+
+/**
+ * Uma linha por usuário conectado ao Google Agenda. Guarda só o
+ * refresh_token (de longa duração) — o access_token de curta duração é
+ * pedido sob demanda a cada operação (ver server/integrations/google-calendar.ts)
+ * e nunca fica persistido. IMPORTANTE: refreshToken é uma credencial
+ * sensível (dá acesso à agenda da pessoa) — em produção considere
+ * criptografar esta coluna em repouso (ex.: com uma chave do provedor de
+ * banco, ou cifrando na aplicação antes de gravar).
+ */
+export const googleCalendarAccounts = mysqlTable("google_calendar_accounts", {
+  id: int("id").autoincrement().primaryKey(),
+  openId: varchar("open_id", { length: 64 }).notNull().unique(),
+  refreshToken: text("refresh_token").notNull(),
+  calendarId: varchar("calendar_id", { length: 255 }).notNull().default("primary"),
+  connectedAt: timestamp("connected_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+});
+
+export type GoogleCalendarAccount = typeof googleCalendarAccounts.$inferSelect;
+export type InsertGoogleCalendarAccount = typeof googleCalendarAccounts.$inferInsert;
