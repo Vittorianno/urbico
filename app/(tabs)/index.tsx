@@ -4,32 +4,22 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { ScreenContainer } from "@/components/screen-container";
 import { colors, InfoCard, PrimaryButton, SectionTitle } from "@/components/urbico-ui";
+import { favoriteRouteParams, isFavoriteConfigured } from "@/lib/favorite-navigation";
 import { useUrbico } from "@/lib/urbico-context";
 
 export default function HomeScreen() {
   const { favorites, isTripActive } = useUrbico();
 
-  // FIX: tocar num favorito ("Casa"/"Trabalho") só abria a tela de Rotas em
-  // branco, obrigando a pessoa a digitar origem e destino manualmente — o
-  // ponto do card salvo era justamente evitar isso. Agora vai direto pra
-  // Rotas já com o destino preenchido (endereço + coordenadas do favorito);
-  // a tela de Rotas usa isso pra também auto-preencher a origem com a
-  // localização atual. Se o favorito ainda não tem endereço configurado
-  // (placeholder "Defina seu endereço", sem coordenadas), leva para editar.
+  // FIX (REGRA 1, 2 e 5): tocar num favorito configurado sempre significa
+  // "ir para lá" — nunca edição. Essa regra agora vem de um helper central
+  // (lib/favorite-navigation.ts) compartilhado com app/favorites.tsx, em vez
+  // de duas cópias da mesma lógica em telas diferentes.
   const openFavorite = (favorite: (typeof favorites)[number]) => {
-    if (favorite.latitude == null || favorite.longitude == null) {
+    if (!isFavoriteConfigured(favorite)) {
       router.push("/favorites");
       return;
     }
-    router.push({
-      pathname: "/routes",
-      params: {
-        destination: favorite.address,
-        destinationName: favorite.label,
-        destinationLat: String(favorite.latitude),
-        destinationLng: String(favorite.longitude),
-      },
-    });
+    router.push(favoriteRouteParams(favorite));
   };
 
   return (
