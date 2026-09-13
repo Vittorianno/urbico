@@ -59,6 +59,19 @@ export type TripRecord = {
   endedAt: string;
 };
 
+// FIX (sincronização na nuvem — ver lib/cloud-sync.tsx): o que é enviado e
+// recebido do backup no servidor. Deliberadamente só o subconjunto que faz
+// sentido levar para outro aparelho: favoritos, agenda e as duas
+// preferências simples. Mensagens do Norby, histórico de viagem, contatos de
+// confiança e localização/rota ativa continuam só locais — não fazem sentido
+// "restaurados" em outro aparelho/sessão.
+export type CloudSyncPayload = {
+  favorites: Favorite[];
+  appointments: Appointment[];
+  notificationsEnabled: boolean;
+  voiceEnabled: boolean;
+};
+
 type UrbicoState = {
   favorites: Favorite[];
   appointments: Appointment[];
@@ -87,6 +100,9 @@ type UrbicoState = {
   // addAppointment já ter acontecido) — sem isto não havia como gravar o
   // vínculo de volta no compromisso local.
   setAppointmentGoogleEventId: (id: string, googleEventId: string | null) => void;
+  // Usado só por lib/cloud-sync.tsx, depois de mesclar o backup do servidor
+  // com o que já existia localmente — nunca chamado diretamente por telas.
+  hydrateFromCloud: (payload: CloudSyncPayload) => void;
   sendMessage: (text: string) => void;
   addNorbyMessage: (text: string) => void;
   addCrowdReport: (level: CrowdLevel) => void;
@@ -149,7 +165,7 @@ export function UrbicoProvider({ children }: { children: ReactNode }) {
     AsyncStorage.getItem(STORAGE_KEY)
       .then((stored) => {
         if (!stored) return;
-        const parsed = JSON.parse(stored) as Partial<Omit<UrbicoState, "addFavorite" | "updateFavorite" | "removeFavorite" | "addAppointment" | "removeAppointment" | "setAppointmentGoogleEventId" | "sendMessage" | "addNorbyMessage" | "addCrowdReport" | "startTrip" | "endTrip" | "setNotificationsEnabled" | "setVoiceEnabled" | "setActiveRoute" | "setCurrentLocation" | "setLocationSharingEnabled" | "addTrustedContact" | "removeTrustedContact" | "setSafeModeEnabled">>;
+        const parsed = JSON.parse(stored) as Partial<Omit<UrbicoState, "addFavorite" | "updateFavorite" | "removeFavorite" | "addAppointment" | "removeAppointment" | "setAppointmentGoogleEventId" | "hydrateFromCloud" | "sendMessage" | "addNorbyMessage" | "addCrowdReport" | "startTrip" | "endTrip" | "setNotificationsEnabled" | "setVoiceEnabled" | "setActiveRoute" | "setCurrentLocation" | "setLocationSharingEnabled" | "addTrustedContact" | "removeTrustedContact" | "setSafeModeEnabled">>;
         if (parsed.favorites) setFavorites(parsed.favorites);
         if (parsed.appointments) setAppointments(parsed.appointments);
         if (parsed.messages) {
@@ -214,6 +230,12 @@ export function UrbicoProvider({ children }: { children: ReactNode }) {
       },
       removeAppointment: (id) => setAppointments((current) => current.filter((appointment) => appointment.id !== id)),
       setAppointmentGoogleEventId: (id, googleEventId) => setAppointments((current) => current.map((appointment) => (appointment.id === id ? { ...appointment, googleEventId: googleEventId ?? undefined } : appointment))),
+      hydrateFromCloud: (payload) => {
+        setFavorites(payload.favorites);
+        setAppointments(payload.appointments);
+        setNotificationsEnabled(payload.notificationsEnabled);
+        setVoiceEnabled(payload.voiceEnabled);
+      },
       sendMessage: (text) => {
         const trimmed = text.trim();
         if (!trimmed) return;
