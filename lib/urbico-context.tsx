@@ -24,6 +24,11 @@ export type Appointment = {
   relevantLineId?: number;
   relevantLineLabel?: string;
   alertsEnabled?: boolean;
+  // FIX: id do evento correspondente na conta Google Agenda conectada (ver
+  // server/integrations/google-calendar.ts). Presente só quando o
+  // compromisso foi sincronizado com sucesso; usado para atualizar (em vez
+  // de duplicar) o mesmo evento se a pessoa editar o compromisso depois.
+  googleEventId?: string;
 };
 
 export type RoutePlace = { name: string; address: string; latitude: number; longitude: number };
@@ -75,8 +80,13 @@ type UrbicoState = {
   // Ver REGRA 4 do brief de auditoria (não duplicar favoritos).
   updateFavorite: (id: string, patch: Omit<Favorite, "id">) => void;
   removeFavorite: (id: string) => void;
-  addAppointment: (appointment: Omit<Appointment, "id">) => void;
+  addAppointment: (appointment: Omit<Appointment, "id">) => string;
   removeAppointment: (id: string) => void;
+  // FIX: usado depois de sincronizar um compromisso recém-criado com o
+  // Google Agenda (a chamada tRPC só devolve o eventId depois do
+  // addAppointment já ter acontecido) — sem isto não havia como gravar o
+  // vínculo de volta no compromisso local.
+  setAppointmentGoogleEventId: (id: string, googleEventId: string | null) => void;
   sendMessage: (text: string) => void;
   addNorbyMessage: (text: string) => void;
   addCrowdReport: (level: CrowdLevel) => void;
@@ -139,7 +149,7 @@ export function UrbicoProvider({ children }: { children: ReactNode }) {
     AsyncStorage.getItem(STORAGE_KEY)
       .then((stored) => {
         if (!stored) return;
-        const parsed = JSON.parse(stored) as Partial<Omit<UrbicoState, "addFavorite" | "updateFavorite" | "removeFavorite" | "addAppointment" | "removeAppointment" | "sendMessage" | "addNorbyMessage" | "addCrowdReport" | "startTrip" | "endTrip" | "setNotificationsEnabled" | "setVoiceEnabled" | "setActiveRoute" | "setCurrentLocation" | "setLocationSharingEnabled" | "addTrustedContact" | "removeTrustedContact" | "setSafeModeEnabled">>;
+        const parsed = JSON.parse(stored) as Partial<Omit<UrbicoState, "addFavorite" | "updateFavorite" | "removeFavorite" | "addAppointment" | "removeAppointment" | "setAppointmentGoogleEventId" | "sendMessage" | "addNorbyMessage" | "addCrowdReport" | "startTrip" | "endTrip" | "setNotificationsEnabled" | "setVoiceEnabled" | "setActiveRoute" | "setCurrentLocation" | "setLocationSharingEnabled" | "addTrustedContact" | "removeTrustedContact" | "setSafeModeEnabled">>;
         if (parsed.favorites) setFavorites(parsed.favorites);
         if (parsed.appointments) setAppointments(parsed.appointments);
         if (parsed.messages) {
@@ -197,8 +207,13 @@ export function UrbicoProvider({ children }: { children: ReactNode }) {
       addFavorite: (favorite) => setFavorites((current) => [...current, { ...favorite, id: `favorite-${Date.now()}` }]),
       updateFavorite: (id, patch) => setFavorites((current) => current.map((favorite) => (favorite.id === id ? { ...favorite, ...patch, id } : favorite))),
       removeFavorite: (id) => setFavorites((current) => current.filter((favorite) => favorite.id !== id)),
-      addAppointment: (appointment) => setAppointments((current) => [...current, { ...appointment, id: `appointment-${Date.now()}` }]),
+      addAppointment: (appointment) => {
+        const id = `appointment-${Date.now()}`;
+        setAppointments((current) => [...current, { ...appointment, id }]);
+        return id;
+      },
       removeAppointment: (id) => setAppointments((current) => current.filter((appointment) => appointment.id !== id)),
+      setAppointmentGoogleEventId: (id, googleEventId) => setAppointments((current) => current.map((appointment) => (appointment.id === id ? { ...appointment, googleEventId: googleEventId ?? undefined } : appointment))),
       sendMessage: (text) => {
         const trimmed = text.trim();
         if (!trimmed) return;
