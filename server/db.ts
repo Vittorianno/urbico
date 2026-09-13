@@ -1,6 +1,6 @@
 import { and, count, desc, eq, gt, gte, inArray, isNull, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { crowdReports, departureAlerts, googleCalendarAccounts, InsertDepartureAlert, InsertUser, users } from "../drizzle/schema";
+import { crowdReports, departureAlerts, googleCalendarAccounts, InsertDepartureAlert, InsertUser, userDataSync, users } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -289,4 +289,20 @@ export async function deleteGoogleCalendarAccount(openId: string) {
   const db = await getDb();
   if (!db) return;
   await db.delete(googleCalendarAccounts).where(eq(googleCalendarAccounts.openId, openId));
+}
+
+// ---------------------------------------------------------------------------
+// Backup/sincronização na nuvem dos dados locais (favoritos, agenda,
+// preferências) — ver comentário em drizzle/schema.ts (userDataSync).
+export async function getUserDataSync(openId: string) {
+  const db = await getDb();
+  if (!db) return null;
+  const rows = await db.select().from(userDataSync).where(eq(userDataSync.openId, openId)).limit(1);
+  return rows[0] ?? null;
+}
+
+export async function saveUserDataSync(openId: string, payload: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Banco de dados indisponível para sincronizar seus dados.");
+  await db.insert(userDataSync).values({ openId, payload }).onDuplicateKeyUpdate({ set: { payload } });
 }
