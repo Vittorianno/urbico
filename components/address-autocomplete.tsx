@@ -34,9 +34,17 @@ export function AddressAutocomplete({
     { enabled, staleTime: 30_000 },
   );
 
+  // FIX: antes, `confirm()` chamava `onSubmit?.()` mesmo quando não havia
+  // nenhuma sugestão real (`suggestions.data?.[0]` ausente) — ou seja, dava
+  // pra "confirmar" um endereço que nunca foi geocodificado. Isso deixava
+  // favoritos e rotas salvos sem latitude/longitude, silenciosamente
+  // quebrados (ver REGRA 1: sem coordenadas não dá pra ir direto pra rota).
+  // Agora só avança quando existe uma sugestão de verdade selecionada.
   const confirm = () => {
-    if (suggestions.data?.[0]) onSelect(suggestions.data[0]);
-    onSubmit?.();
+    if (suggestions.data?.[0]) {
+      onSelect(suggestions.data[0]);
+      onSubmit?.();
+    }
   };
 
   const handleSearch = () => {
@@ -45,7 +53,6 @@ export function AddressAutocomplete({
       return;
     }
     void suggestions.refetch();
-    onSubmit?.();
   };
 
   const showManualHint = enabled && !suggestions.isFetching && !suggestions.data?.length;
@@ -86,7 +93,7 @@ export function AddressAutocomplete({
           style={styles.results}
           renderItem={({ item }) => (
             <Pressable
-              onPress={() => onSelect(item)}
+              onPress={() => { onSelect(item); onSubmit?.(); }}
               style={({ pressed }) => [styles.result, pressed && styles.pressed]}
             >
               <MaterialIcons name="place" size={17} color={colors.blue} />
@@ -106,8 +113,8 @@ export function AddressAutocomplete({
       {showManualHint ? (
         <Text style={styles.hint}>
           {suggestions.error
-            ? "Sugestões automáticas indisponíveis. Você pode usar o endereço digitado manualmente."
-            : "Você pode confirmar o endereço digitado manualmente."}
+            ? "Sugestões automáticas indisponíveis no momento. Tente novamente em instantes."
+            : "Nenhum endereço encontrado ainda. Ajuste o texto e toque em buscar."}
         </Text>
       ) : null}
     </View>
