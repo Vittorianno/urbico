@@ -50,7 +50,7 @@ async function suggestAddressesViaNominatim(query: string): Promise<GeocodedPlac
   url.searchParams.set("accept-language", "pt-BR");
   url.searchParams.set("limit", "5");
   const response = await fetch(url, { headers: { "User-Agent": "UrbicoApp/1.0 (projeto pessoal de mobilidade urbana)" } });
-  if (!response.ok) throw new Error("O Nominatim não respondeu.");
+  if (!response.ok) throw new Error(`O Nominatim respondeu com status ${response.status}.`);
   const payload = (await response.json()) as NominatimResult[];
   return payload
     .map((item) => {
@@ -104,16 +104,78 @@ export function decodeValhallaShape(shape: string, precision = 6): number[][] {
 
 type ValhallaRoute = { trip?: { summary?: { length?: number; time?: number }; legs?: Array<{ shape?: string; maneuvers?: Array<{ instruction?: string; length?: number; time?: number }> }> } };
 
-export async function planWalkingRoute(origin: Coordinates, destination: Coordinates): Promise<WalkingRoute | null> {
+async function planWalkingRouteViaValhalla(origin: Coordinates, destination: Coordinates): Promise<WalkingRoute | null> {
   const baseUrl = serviceUrl("VALHALLA_BASE_URL");
   if (!baseUrl) return null;
   const url = new URL(`${baseUrl}/route`);
   url.searchParams.set("json", JSON.stringify({ locations: [{ lat: origin.latitude, lon: origin.longitude }, { lat: destination.latitude, lon: destination.longitude }], costing: "pedestrian", units: "kilometers", language: "pt-BR", shape_format: "polyline6" }));
   const response = await fetch(url);
-  if (!response.ok) throw new Error("O roteador aberto não respondeu.");
+  if (!response.ok) throw new Error("O roteador aberto (Valhalla) não respondeu.");
   const payload = (await response.json()) as ValhallaRoute;
   const trip = payload.trip;
   if (!trip?.summary || typeof trip.summary.length !== "number" || typeof trip.summary.time !== "number") return null;
   const leg = trip.legs?.[0];
   return { distanceMeters: Math.round(trip.summary.length * 1000), durationSeconds: Math.round(trip.summary.time), points: leg?.shape ? decodeValhallaShape(leg.shape) : [], instructions: (leg?.maneuvers ?? []).map((maneuver) => ({ text: maneuver.instruction ?? "Continue pela rota", distanceMeters: Math.round((maneuver.length ?? 0) * 1000), durationSeconds: Math.round(maneuver.time ?? 0) })) };
+}
+
+// FIX: assim como a geocodificação, o cálculo de rota a pé dependia de um
+// servidor Valhalla próprio (VALHALLA_BASE_URL) que normalmente não está
+// configurado — sem ele, `planWalkingRoute` sempre voltava `null`, e a tela
+// de Rotas mostrava "rota automática indisponível" mesmo com origem/destino
+// prontos. O OSRM tem um servidor de demonstração público e gratuito
+// (router.project-osrm.org) que cobre o mesmo caso de uso sem precisar de
+// infraestrutura própria — mesma lógica de fallback usada no geocode.
+type OsrmManeuver = { type?: string; modifier?: string };
+type OsrmStep = { distance?: number; duration?: number; name?: string; maneuver?: OsrmManeuver };
+type OsrmRoute = { distance?: number; duration?: number; geometry?: { coordinates?: [number, number][] }; legs?: Array<{ steps?: OsrmStep[] }> };
+type OsrmResponse = { code?: string; routes?: OsrmRoute[] };
+
+const OSRM_MODIFIER_TEXT: Record<string, string> = {
+  left: "Vire à esquerda", right: "Vire à direita",
+  "slight left": "Mantenha-se à esquerda", "slight right": "Mantenha-se à direita",
+  "sharp left": "Vire acentuadamente à esquerda", "sharp right": "Vire acentuadamente à direita",
+  straight: "Siga em frente", uturn: "Faça o retorno",
+};
+
+function describeOsrmStep(step: OsrmStep): string {
+  const streetSuffix = step.name ? ` em ${step.name}` : "";
+  const type = step.maneuver?.type;
+  const modifier = step.maneuver?.modifier;
+  if (type === "depart") return `Siga${streetSuffix || " em frente"}`;
+  if (type === "arrive") return "Você chegou ao destino";
+  if ((type === "roundabout" || type === "rotary") ) return `Entre na rotatória${streetSuffix}`;
+  if (modifier && OSRM_MODIFIER_TEXT[modifier]) return `${OSRM_MODIFIER_TEXT[modifier]}${streetSuffix}`;
+  return `Continue${streetSuffix || " pela via"}`;
+}
+
+async function planWalkingRouteViaOsrm(origin: Coordinates, destination: Coordinates): Promise<WalkingRoute | null> {
+  const url = new URL(`https://router.project-osrm.org/route/v1/foot/${origin.longitude},${origin.latitude};${destination.longitude},${destination.latitude}`);
+  url.searchParams.set("overview", "full");
+  url.searchParams.set("geometries", "geojson");
+  url.searchParams.set("steps", "true");
+  const response = await fetch(url, { headers: { "User-Agent": "UrbicoApp/1.0 (projeto pessoal de mobilidade urbana)" } });
+  if (!response.ok) throw new Error(`O roteador aberto (OSRM) respondeu com status ${response.status}.`);
+  const payload = (await response.json()) as OsrmResponse;
+  const route = payload.routes?.[0];
+  if (payload.code !== "Ok" || !route || typeof route.distance !== "number" || typeof route.duration !== "number") return null;
+  const steps = route.legs?.[0]?.steps ?? [];
+  return {
+    distanceMeters: Math.round(route.distance),
+    durationSeconds: Math.round(route.duration),
+    points: route.geometry?.coordinates ?? [],
+    instructions: steps.map((step) => ({ text: describeOsrmStep(step), distanceMeters: Math.round(step.distance ?? 0), durationSeconds: Math.round(step.duration ?? 0) })),
+  };
+}
+
+export async function planWalkingRoute(origin: Coordinates, destination: Coordinates): Promise<WalkingRoute | null> {
+  const baseUrl = serviceUrl("VALHALLA_BASE_URL");
+  if (baseUrl) {
+    try {
+      return await planWalkingRouteViaValhalla(origin, destination);
+    } catch {
+      // Valhalla configurado mas fora do ar: cai para o OSRM público em vez
+      // de deixar a viagem sem rota.
+    }
+  }
+  return planWalkingRouteViaOsrm(origin, destination);
 }
