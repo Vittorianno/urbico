@@ -9,6 +9,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import "react-native-reanimated";
 import { Platform } from "react-native";
 import { ThemeProvider } from "@/lib/theme-provider";
+import { CloudSync } from "@/lib/cloud-sync";
 import { UrbicoProvider } from "@/lib/urbico-context";
 import {
   SafeAreaFrameContext,
@@ -87,6 +88,12 @@ export default function RootLayout() {
           {/* Default to hiding native headers so raw route segments don't appear (e.g. "(tabs)", "products/[id]"). */}
           {/* If a screen needs the native header, explicitly enable it and set a human title via Stack.Screen options. */}
           <UrbicoProvider>
+            {/* FIX (sincronização na nuvem): montado uma única vez aqui,
+                fora de qualquer tela — não pertence à Agenda, aos Favoritos
+                nem a nenhuma área específica. Não renderiza nada; só
+                mantém favoritos/agenda/preferências sincronizados com a
+                conta quando a pessoa está logada (ver lib/cloud-sync.tsx). */}
+            <CloudSync />
             <Stack screenOptions={{ headerShown: false }}>
               <Stack.Screen name="(tabs)" />
               <Stack.Screen name="login" options={{ presentation: "fullScreenModal" }} />
