@@ -69,6 +69,11 @@ type UrbicoState = {
   trustedContacts: TrustedContact[];
   safeModeEnabled: boolean;
   addFavorite: (favorite: Omit<Favorite, "id">) => void;
+  // FIX: não existia forma de atualizar um favorito já criado — qualquer
+  // "edição" na prática criava um registro novo via addFavorite, deixando o
+  // favorito antigo (ex.: "Casa" com endereço placeholder) órfão na lista.
+  // Ver REGRA 4 do brief de auditoria (não duplicar favoritos).
+  updateFavorite: (id: string, patch: Omit<Favorite, "id">) => void;
   removeFavorite: (id: string) => void;
   addAppointment: (appointment: Omit<Appointment, "id">) => void;
   removeAppointment: (id: string) => void;
@@ -134,7 +139,7 @@ export function UrbicoProvider({ children }: { children: ReactNode }) {
     AsyncStorage.getItem(STORAGE_KEY)
       .then((stored) => {
         if (!stored) return;
-        const parsed = JSON.parse(stored) as Partial<Omit<UrbicoState, "addFavorite" | "removeFavorite" | "addAppointment" | "removeAppointment" | "sendMessage" | "addNorbyMessage" | "addCrowdReport" | "startTrip" | "endTrip" | "setNotificationsEnabled" | "setVoiceEnabled" | "setActiveRoute" | "setCurrentLocation" | "setLocationSharingEnabled" | "addTrustedContact" | "removeTrustedContact" | "setSafeModeEnabled">>;
+        const parsed = JSON.parse(stored) as Partial<Omit<UrbicoState, "addFavorite" | "updateFavorite" | "removeFavorite" | "addAppointment" | "removeAppointment" | "sendMessage" | "addNorbyMessage" | "addCrowdReport" | "startTrip" | "endTrip" | "setNotificationsEnabled" | "setVoiceEnabled" | "setActiveRoute" | "setCurrentLocation" | "setLocationSharingEnabled" | "addTrustedContact" | "removeTrustedContact" | "setSafeModeEnabled">>;
         if (parsed.favorites) setFavorites(parsed.favorites);
         if (parsed.appointments) setAppointments(parsed.appointments);
         if (parsed.messages) {
@@ -190,6 +195,7 @@ export function UrbicoProvider({ children }: { children: ReactNode }) {
       trustedContacts,
       safeModeEnabled,
       addFavorite: (favorite) => setFavorites((current) => [...current, { ...favorite, id: `favorite-${Date.now()}` }]),
+      updateFavorite: (id, patch) => setFavorites((current) => current.map((favorite) => (favorite.id === id ? { ...favorite, ...patch, id } : favorite))),
       removeFavorite: (id) => setFavorites((current) => current.filter((favorite) => favorite.id !== id)),
       addAppointment: (appointment) => setAppointments((current) => [...current, { ...appointment, id: `appointment-${Date.now()}` }]),
       removeAppointment: (id) => setAppointments((current) => current.filter((appointment) => appointment.id !== id)),
