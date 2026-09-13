@@ -18,4 +18,14 @@ export const ENV = {
   // Opcional: o agendador interno (setInterval em server/_core/index.ts) já
   // cobre o caso comum de hospedagem com processo de longa duração.
   cronSecret: process.env.CRON_SECRET ?? "",
+  // Integração com o Google Agenda (server/integrations/google-calendar.ts).
+  // Credenciais OAuth criadas no Google Cloud Console (APIs & Services →
+  // Credentials → OAuth client ID → "Web application"). googleRedirectUri
+  // deve ser EXATAMENTE a mesma URL cadastrada lá em "Authorized redirect
+  // URIs" (ex.: https://seu-dominio.com/api/google-calendar/callback) —
+  // precisa ser uma URL pública e estável (o Google não aceita localhost em
+  // produção nem redireciona direto para o app mobile).
+  googleClientId: process.env.GOOGLE_CLIENT_ID ?? "",
+  googleClientSecret: process.env.GOOGLE_CLIENT_SECRET ?? "",
+  googleRedirectUri: process.env.GOOGLE_REDIRECT_URI ?? "",
 };
