@@ -83,3 +83,24 @@ export const googleCalendarAccounts = mysqlTable("google_calendar_accounts", {
 
 export type GoogleCalendarAccount = typeof googleCalendarAccounts.$inferSelect;
 export type InsertGoogleCalendarAccount = typeof googleCalendarAccounts.$inferInsert;
+
+/**
+ * Backup/sincronização na nuvem dos dados locais do app (favoritos, agenda,
+ * preferências) — uma linha por usuário (openId), guardando tudo como um
+ * único JSON. Permite recuperar esses dados ao entrar com a mesma conta em
+ * outro aparelho (ver lib/cloud-sync.tsx). Deliberadamente um blob único em
+ * vez de tabelas normalizadas por favorito/compromisso: o formato local já
+ * é uma lista de objetos JSON-serializáveis simples, e nenhuma outra parte
+ * do backend precisa consultar favoritos/compromissos individualmente — só
+ * ler/gravar tudo de uma vez por usuário, o que este formato faz com uma
+ * única linha por conta em vez de N linhas por item.
+ */
+export const userDataSync = mysqlTable("user_data_sync", {
+  id: int("id").autoincrement().primaryKey(),
+  openId: varchar("open_id", { length: 64 }).notNull().unique(),
+  payload: text("payload").notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+});
+
+export type UserDataSync = typeof userDataSync.$inferSelect;
+export type InsertUserDataSync = typeof userDataSync.$inferInsert;
