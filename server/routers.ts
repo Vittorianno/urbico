@@ -2,10 +2,19 @@ import { COOKIE_NAME } from "../shared/const.js";
 import { z } from "zod";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
-import { adminProcedure, publicProcedure, router } from "./_core/trpc";
+import { adminProcedure, protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { geocode, planWalkingRoute, suggestAddresses } from "./integrations/open-geospatial";
 import { askNorby } from "./integrations/norby";
 import { getLineStops, getLineVehicles, getStopPredictions, searchLines, searchStops } from "./integrations/sptrans";
+import {
+  buildGoogleAuthUrl,
+  createGoogleCalendarEvent,
+  deleteGoogleCalendarEvent,
+  listGoogleCalendarEvents,
+  refreshGoogleAccessToken,
+  signGoogleOAuthState,
+  updateGoogleCalendarEvent,
+} from "./integrations/google-calendar";
 import * as db from "./db";
 
 const safeIntegration = async <T>(operation: () => Promise<T>) => {
@@ -138,6 +147,78 @@ export const appRouter = router({
     recentBatch: publicProcedure.input(z.object({ lineIds: z.array(z.number().int().positive()).min(1).max(20) })).query(async ({ input }) => {
       return db.getRecentCrowdSummaryBatch(input.lineIds);
     }),
+  }),
+  // Integração com o Google Agenda (ver server/integrations/google-calendar.ts).
+  // Tudo aqui é protectedProcedure: exige a pessoa logada no Urbico, porque
+  // a conta do Google Agenda é ligada ao openId dela, não a um dispositivo
+  // anônimo (diferente dos alertas de saída/lotação).
+  googleCalendar: router({
+    status: protectedProcedure.query(async ({ ctx }) => {
+      const account = await db.getGoogleCalendarAccount(ctx.user.openId);
+      return { connected: Boolean(account) };
+    }),
+    // Devolve a URL de consentimento do Google já pronta — o cliente abre
+    // isso no navegador do sistema (WebBrowser.openAuthSessionAsync) e
+    // aguarda o redirecionamento de volta (ver app/(tabs)/profile.tsx).
+    getAuthUrl: protectedProcedure.mutation(async ({ ctx }) => {
+      const state = await signGoogleOAuthState(ctx.user.openId);
+      return { url: buildGoogleAuthUrl(state) };
+    }),
+    disconnect: protectedProcedure.mutation(async ({ ctx }) => {
+      await db.deleteGoogleCalendarAccount(ctx.user.openId);
+      return { disconnected: true };
+    }),
+    // Cria (sem googleEventId) ou atualiza (com googleEventId) o evento
+    // correspondente a um compromisso do Urbico na conta Google conectada.
+    // Se a conta não estiver conectada, devolve synced:false sem lançar erro
+    // — o compromisso continua salvo normalmente só no Urbico.
+    pushAppointment: protectedProcedure
+      .input(
+        z.object({
+          googleEventId: z.string().trim().min(1).max(255).optional(),
+          title: z.string().trim().min(1).max(160),
+          address: z.string().trim().min(1).max(300),
+          startIso: z.string(),
+          endIso: z.string(),
+        }),
+      )
+      .mutation(async ({ ctx, input }) =>
+        safeIntegration(async () => {
+          const account = await db.getGoogleCalendarAccount(ctx.user.openId);
+          if (!account) return { synced: false as const, eventId: null };
+          const accessToken = await refreshGoogleAccessToken(account.refreshToken);
+          const eventInput = { summary: input.title, location: input.address, startIso: input.startIso, endIso: input.endIso };
+          const event = input.googleEventId
+            ? await updateGoogleCalendarEvent(accessToken, account.calendarId, input.googleEventId, eventInput)
+            : await createGoogleCalendarEvent(accessToken, account.calendarId, eventInput);
+          return { synced: true as const, eventId: event.id };
+        }),
+      ),
+    removeAppointment: protectedProcedure.input(z.object({ googleEventId: z.string().trim().min(1).max(255) })).mutation(async ({ ctx, input }) =>
+      safeIntegration(async () => {
+        const account = await db.getGoogleCalendarAccount(ctx.user.openId);
+        if (!account) return { removed: false };
+        const accessToken = await refreshGoogleAccessToken(account.refreshToken);
+        await deleteGoogleCalendarEvent(accessToken, account.calendarId, input.googleEventId);
+        return { removed: true };
+      }),
+    ),
+    // Próximos eventos do Google Agenda da pessoa — base para, no futuro,
+    // trazer compromissos criados direto no Google para dentro da tela de
+    // Agenda do Urbico (hoje o app só empurra os compromissos criados nele
+    // para o Google; puxar ainda não tem UI própria).
+    listUpcoming: protectedProcedure.query(async ({ ctx }) =>
+      safeIntegration(async () => {
+        const account = await db.getGoogleCalendarAccount(ctx.user.openId);
+        if (!account) return { connected: false as const, events: [] };
+        const accessToken = await refreshGoogleAccessToken(account.refreshToken);
+        const events = await listGoogleCalendarEvents(accessToken, account.calendarId, new Date().toISOString());
+        return {
+          connected: true as const,
+          events: events.map((event) => ({ id: event.id, title: event.summary ?? "(sem título)", startIso: event.start?.dateTime ?? null, location: event.location ?? null })),
+        };
+      }),
+    ),
   }),
 });
 
