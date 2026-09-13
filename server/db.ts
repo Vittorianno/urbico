@@ -1,6 +1,6 @@
 import { and, count, desc, eq, gt, gte, inArray, isNull, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { crowdReports, departureAlerts, InsertDepartureAlert, InsertUser, users } from "../drizzle/schema";
+import { crowdReports, departureAlerts, googleCalendarAccounts, InsertDepartureAlert, InsertUser, users } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -267,4 +267,26 @@ export async function getAdminOverview() {
     crowdReportsLast24h: Number(crowdTotals?.total ?? 0),
     topLinesLast24h: topLines.map((row) => ({ lineId: row.lineId, reports: Number(row.reports) })),
   };
+}
+
+// ---------------------------------------------------------------------------
+// Google Agenda — uma linha por usuário (openId), guarda só o refresh_token
+// (ver comentário em drizzle/schema.ts sobre sensibilidade deste dado).
+export async function saveGoogleCalendarAccount(openId: string, refreshToken: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Banco de dados indisponível para conectar o Google Agenda.");
+  await db.insert(googleCalendarAccounts).values({ openId, refreshToken }).onDuplicateKeyUpdate({ set: { refreshToken } });
+}
+
+export async function getGoogleCalendarAccount(openId: string) {
+  const db = await getDb();
+  if (!db) return null;
+  const rows = await db.select().from(googleCalendarAccounts).where(eq(googleCalendarAccounts.openId, openId)).limit(1);
+  return rows[0] ?? null;
+}
+
+export async function deleteGoogleCalendarAccount(openId: string) {
+  const db = await getDb();
+  if (!db) return;
+  await db.delete(googleCalendarAccounts).where(eq(googleCalendarAccounts.openId, openId));
 }
