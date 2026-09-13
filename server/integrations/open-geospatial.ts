@@ -17,9 +17,9 @@ function mapPeliasFeature(feature: PeliasFeature, fallback: string): GeocodedPla
   return { name: feature.properties?.name ?? label, address: label, latitude, longitude };
 }
 
-export async function suggestAddresses(query: string): Promise<GeocodedPlace[]> {
+async function suggestAddressesViaPelias(query: string): Promise<GeocodedPlace[]> {
   const baseUrl = serviceUrl("PELIAS_BASE_URL");
-  if (!baseUrl || query.trim().length < 2) return [];
+  if (!baseUrl) return [];
   const url = new URL(`${baseUrl}/v1/autocomplete`);
   url.searchParams.set("text", query);
   url.searchParams.set("lang", "pt-BR");
@@ -29,6 +29,51 @@ export async function suggestAddresses(query: string): Promise<GeocodedPlace[]> 
   if (!response.ok) throw new Error("A busca aberta de endereços não respondeu.");
   const payload = (await response.json()) as PeliasResponse;
   return (payload.features ?? []).map((feature) => mapPeliasFeature(feature, query)).filter((place): place is GeocodedPlace => Boolean(place));
+}
+
+// FIX: sem um PELIAS_BASE_URL configurado (o normal, já que rodar um Pelias
+// exige infraestrutura própria com Elasticsearch), `suggestAddresses` sempre
+// retornava `[]` — nenhuma sugestão de endereço aparecia nunca, o que
+// impedia salvar favoritos com coordenadas reais. O Nominatim (OpenStreetMap)
+// é um serviço público, gratuito e sem necessidade de chave de API, e serve
+// como busca de endereço "de verdade" pronta para uso, sem exigir nenhuma
+// infraestrutura própria. Ele exige apenas um User-Agent identificando o app
+// (política de uso do Nominatim) e um limite de ~1 requisição por segundo.
+type NominatimResult = { display_name?: string; lat?: string; lon?: string; name?: string };
+
+async function suggestAddressesViaNominatim(query: string): Promise<GeocodedPlace[]> {
+  const url = new URL("https://nominatim.openstreetmap.org/search");
+  url.searchParams.set("q", query);
+  url.searchParams.set("format", "jsonv2");
+  url.searchParams.set("addressdetails", "0");
+  url.searchParams.set("countrycodes", "br");
+  url.searchParams.set("accept-language", "pt-BR");
+  url.searchParams.set("limit", "5");
+  const response = await fetch(url, { headers: { "User-Agent": "UrbicoApp/1.0 (projeto pessoal de mobilidade urbana)" } });
+  if (!response.ok) throw new Error("O Nominatim não respondeu.");
+  const payload = (await response.json()) as NominatimResult[];
+  return payload
+    .map((item) => {
+      const latitude = Number(item.lat);
+      const longitude = Number(item.lon);
+      if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || !item.display_name) return null;
+      return { name: item.name ?? item.display_name, address: item.display_name, latitude, longitude };
+    })
+    .filter((place): place is GeocodedPlace => Boolean(place));
+}
+
+export async function suggestAddresses(query: string): Promise<GeocodedPlace[]> {
+  if (query.trim().length < 2) return [];
+  const baseUrl = serviceUrl("PELIAS_BASE_URL");
+  if (baseUrl) {
+    try {
+      return await suggestAddressesViaPelias(query);
+    } catch {
+      // Pelias configurado mas fora do ar: cai para o Nominatim em vez de
+      // deixar a pessoa sem nenhuma sugestão.
+    }
+  }
+  return suggestAddressesViaNominatim(query);
 }
 
 export async function geocode(query: string) {
