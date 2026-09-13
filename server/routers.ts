@@ -27,6 +27,33 @@ const safeIntegration = async <T>(operation: () => Promise<T>) => {
 
 const crowdLevelSchema = z.enum(["Vazio", "Baixa", "Normal", "Alta", "Lotado"]);
 
+// FIX (sincronização na nuvem): schemas dos itens salvos localmente
+// (favoritos/compromissos), usados só para validar o payload de
+// userData.push — o formato espelha lib/urbico-context.tsx (Favorite /
+// Appointment), mas fica duplicado aqui de propósito: o schema do tRPC não
+// pode importar tipos de dentro de app/lib do cliente.
+const favoriteSyncSchema = z.object({
+  id: z.string().min(1).max(80),
+  label: z.string().min(1).max(80),
+  address: z.string().min(1).max(300),
+  latitude: z.number().min(-90).max(90).optional(),
+  longitude: z.number().min(-180).max(180).optional(),
+});
+
+const appointmentSyncSchema = z.object({
+  id: z.string().min(1).max(80),
+  title: z.string().min(1).max(160),
+  date: z.string().min(1).max(20),
+  time: z.string().min(1).max(10),
+  address: z.string().min(1).max(300),
+  latitude: z.number().min(-90).max(90).optional(),
+  longitude: z.number().min(-180).max(180).optional(),
+  relevantLineId: z.number().int().positive().optional(),
+  relevantLineLabel: z.string().max(80).optional(),
+  alertsEnabled: z.boolean().optional(),
+  googleEventId: z.string().max(255).optional(),
+});
+
 export const appRouter = router({
   // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
   system: systemRouter,
@@ -219,6 +246,42 @@ export const appRouter = router({
         };
       }),
     ),
+  }),
+  // Backup/sincronização na nuvem dos dados locais (favoritos, agenda,
+  // preferências) — ver drizzle/schema.ts (userDataSync) e lib/cloud-sync.tsx.
+  // protectedProcedure: cada pessoa só lê/grava o próprio payload (por
+  // ctx.user.openId), nunca vaza dado de uma conta para outra.
+  userData: router({
+    pull: protectedProcedure.query(async ({ ctx }) => {
+      const record = await db.getUserDataSync(ctx.user.openId);
+      if (!record) return null;
+      try {
+        return JSON.parse(record.payload) as {
+          favorites: z.infer<typeof favoriteSyncSchema>[];
+          appointments: z.infer<typeof appointmentSyncSchema>[];
+          notificationsEnabled: boolean;
+          voiceEnabled: boolean;
+        };
+      } catch {
+        // Payload corrompido (não deveria acontecer, já que só nós
+        // escrevemos nele) — trata como "sem backup" em vez de derrubar a
+        // consulta inteira.
+        return null;
+      }
+    }),
+    push: protectedProcedure
+      .input(
+        z.object({
+          favorites: z.array(favoriteSyncSchema).max(200),
+          appointments: z.array(appointmentSyncSchema).max(500),
+          notificationsEnabled: z.boolean(),
+          voiceEnabled: z.boolean(),
+        }),
+      )
+      .mutation(async ({ ctx, input }) => {
+        await db.saveUserDataSync(ctx.user.openId, JSON.stringify(input));
+        return { synced: true };
+      }),
   }),
 });
 
