@@ -33,13 +33,33 @@ describe("open geospatial fallback", () => {
     expect(calledUrl).toContain("nominatim.openstreetmap.org");
   });
 
-  it("returns no route without Valhalla", async () => {
+  // FIX: mesma lógica para a rota a pé — sem Valhalla agora cai para o
+  // servidor público do OSRM em vez de retornar null.
+  it("falls back to OSRM without Valhalla", async () => {
     delete process.env.VALHALLA_BASE_URL;
-    await expect(
-      planWalkingRoute(
-        { latitude: -23.561, longitude: -46.656 },
-        { latitude: -23.550, longitude: -46.633 },
-      ),
-    ).resolves.toBeNull();
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        code: "Ok",
+        routes: [
+          {
+            distance: 850,
+            duration: 640,
+            geometry: { coordinates: [[-46.656, -23.561], [-46.633, -23.55]] },
+            legs: [{ steps: [{ distance: 850, duration: 640, name: "Rua Exemplo", maneuver: { type: "depart" } }] }],
+          },
+        ],
+      }),
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    const route = await planWalkingRoute({ latitude: -23.561, longitude: -46.656 }, { latitude: -23.55, longitude: -46.633 });
+    expect(route).toEqual({
+      distanceMeters: 850,
+      durationSeconds: 640,
+      points: [[-46.656, -23.561], [-46.633, -23.55]],
+      instructions: [{ text: "Siga em Rua Exemplo", distanceMeters: 850, durationSeconds: 640 }],
+    });
+    const calledUrl = String(fetchMock.mock.calls[0]?.[0]);
+    expect(calledUrl).toContain("router.project-osrm.org");
   });
 });
