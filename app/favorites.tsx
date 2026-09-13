@@ -1,7 +1,7 @@
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { router } from "expo-router";
 import { useState } from "react";
-import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, FlatList, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { AddressAutocomplete, type AddressSuggestion } from "@/components/address-autocomplete";
 import { ScreenContainer } from "@/components/screen-container";
@@ -21,7 +21,18 @@ export default function FavoritesScreen() {
   const resetForm = () => { setLabel(""); setAddress(""); setPlace(null); setEditingId(null); };
   const save = () => {
     if (!label.trim() || !address.trim()) return;
-    const patch = { label: label.trim(), address: address.trim(), latitude: place?.latitude, longitude: place?.longitude };
+    // FIX: antes dava pra salvar um favorito sem coordenadas (bastava digitar
+    // texto e apertar salvar, sem tocar numa sugestão da lista). Esse
+    // favorito ficava com endereço preenchido mas sem lat/lng, e por isso
+    // `isFavoriteConfigured` nunca reconhecia ele como "pronto" — tocar nele
+    // sempre voltava pra este formulário em vez de ir direto pra rota. Agora
+    // é obrigatório escolher um endereço da lista de sugestões antes de
+    // salvar.
+    if (!place) {
+      Alert.alert("Escolha um endereço da lista", "Toque em uma das sugestões que aparecem abaixo do campo de endereço. Isso é necessário para o Urbico calcular a rota até este local.");
+      return;
+    }
+    const patch = { label: label.trim(), address: address.trim(), latitude: place.latitude, longitude: place.longitude };
     if (editingId) updateFavorite(editingId, patch);
     else addFavorite(patch);
     resetForm();
@@ -36,8 +47,10 @@ export default function FavoritesScreen() {
   // FIX: toque principal no cartão agora só faz uma coisa (REGRA 1/2 do
   // brief): se o favorito já está configurado, vai direto para Rotas com o
   // destino pronto — nunca mais abre edição por engano. Se ainda não está
-  // configurado, abre o formulário de configuração aqui em cima. Editar um
-  // favorito JÁ configurado agora exige o ícone de lápis (ação separada).
+  // configurado (ou ficou incompleto por causa do bug acima, em favoritos
+  // salvos antes desta correção), abre o formulário de configuração aqui em
+  // cima para a pessoa completar o endereço direito. Editar um favorito JÁ
+  // configurado agora exige o ícone de lápis (ação separada).
   const openFavorite = (favorite: (typeof favorites)[number]) => {
     if (!isFavoriteConfigured(favorite)) {
       startEdit(favorite);
