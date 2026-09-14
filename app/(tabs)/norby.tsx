@@ -1,3 +1,4 @@
+import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { router } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { Alert, FlatList, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
@@ -39,7 +40,7 @@ function NorbyAvatar({ large = false }: { large?: boolean }) {
 }
 
 export default function NorbyScreen() {
-  const { messages, sendMessage, addNorbyMessage, addCrowdReport, voiceEnabled, activeRoute, currentLocation, startTrip } = useUrbico();
+  const { messages, sendMessage, addNorbyMessage, clearMessages, addCrowdReport, voiceEnabled, activeRoute, currentLocation, startTrip } = useUrbico();
   const [draft, setDraft] = useState("");
   const [isListening, setIsListening] = useState(false);
   const [showConversation, setShowConversation] = useState(true);
@@ -175,6 +176,26 @@ export default function NorbyScreen() {
     listeningRef.current = false;
   };
 
+  // FIX: botão discreto de "limpar conversa" no cabeçalho do chat — pedido
+  // explicitamente para evitar que uma conversa muito longa acumule
+  // mensagens na interface. Confirma antes de apagar, mexe só nas mensagens
+  // (clearMessages, ver lib/urbico-context.tsx) e volta para a tela inicial
+  // do Norby — não desloga, não apaga conta, favoritos, agenda ou qualquer
+  // outro dado.
+  const confirmClearChat = () => {
+    Alert.alert("Limpar conversa?", "As mensagens desta conversa serão removidas. Isso não afeta sua conta, favoritos ou agenda.", [
+      { text: "Cancelar", style: "cancel" },
+      {
+        text: "Limpar",
+        style: "destructive",
+        onPress: () => {
+          clearMessages();
+          setShowConversation(false);
+        },
+      },
+    ]);
+  };
+
   const showAbout = () => Alert.alert("Sobre o Norby", "Seu assistente de mobilidade para consultar linhas, organizar rotas e acompanhar decisões de viagem.");
   const showMore = () => Alert.alert("Opções do Norby", "Você pode consultar ônibus, planejar uma rota ou abrir suas configurações de voz.", [{ text: "Fechar", style: "cancel" }, { text: "Abrir Perfil", onPress: () => router.push("/profile") }]);
   const showComposerOptions = () => Alert.alert("Adicionar ao chat", "Escolha uma ação rápida.", [{ text: "Cancelar", style: "cancel" }, { text: "Planejar rota", onPress: () => router.push("/routes") }, { text: "Consultar ônibus", onPress: () => setDraft("Próximos ônibus") }]);
@@ -200,6 +221,7 @@ export default function NorbyScreen() {
         <View style={styles.chatHeader}>
           <Pressable accessibilityLabel="Voltar" onPress={() => setShowConversation(false)} style={({ pressed }) => [styles.headerButton, pressed && styles.pressed]}><NorbyIcon name="arrow-back" size={29} color={colors.text} /></Pressable>
           <View style={styles.headerCenter}><Text style={styles.chatTitle}>Norby</Text><Text style={styles.chatSubtitle}>Seu assistente de mobilidade</Text></View>
+          <Pressable accessibilityLabel="Limpar conversa" onPress={confirmClearChat} style={({ pressed }) => [styles.headerButton, pressed && styles.pressed]}><MaterialIcons name="delete-outline" size={22} color={colors.muted} /></Pressable>
           <Pressable accessibilityLabel="Mais opções" onPress={showMore} style={({ pressed }) => [styles.headerButton, pressed && styles.pressed]}><NorbyIcon name="more-vert" size={28} color={colors.text} /></Pressable>
         </View>
 
@@ -243,7 +265,7 @@ function RouteCard({ onStart }: { onStart: () => void }) {
 
 const styles = StyleSheet.create({
   chatScreen: { flex: 1 },
-  chatHeader: { minHeight: 78, paddingHorizontal: 16, flexDirection: "row", alignItems: "center", borderBottomWidth: 1, borderColor: colors.border },
+  chatHeader: { minHeight: 78, paddingHorizontal: 10, flexDirection: "row", alignItems: "center", borderBottomWidth: 1, borderColor: colors.border },
   headerButton: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
   headerCenter: { flex: 1, alignItems: "center" },
   chatTitle: { color: colors.text, fontSize: 22, fontWeight: "800" },
