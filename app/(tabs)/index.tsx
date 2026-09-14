@@ -2,6 +2,7 @@ import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { router } from "expo-router";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
+import { AdBanner } from "@/components/ad-banner";
 import { ScreenContainer } from "@/components/screen-container";
 import { colors, InfoCard, PrimaryButton, SectionTitle } from "@/components/urbico-ui";
 import { favoriteRouteParams, isFavoriteConfigured } from "@/lib/favorite-navigation";
@@ -91,6 +92,15 @@ export default function HomeScreen() {
         </View>
 
         <PrimaryButton label="Planejar uma rota" icon="alt-route" onPress={() => router.push("/routes")} style={styles.planButton} />
+
+        {/* FIX (AdMob): área reservada e padronizada de publicidade — sempre
+            no mesmo lugar (fim da Home, depois de todo conteúdo e ações),
+            nunca sobre mapa, rotas, chat ou botões. Formato adaptativo (ver
+            components/ad-banner.tsx); não aparece nada aqui enquanto não
+            carregar, e nada aparece no preview web (só em build nativo). */}
+        <View style={styles.adSlot}>
+          <AdBanner />
+        </View>
       </ScrollView>
     </ScreenContainer>
   );
@@ -124,6 +134,7 @@ const styles = StyleSheet.create({
   placeAddress: { marginTop: 2, color: colors.muted, fontSize: 11, lineHeight: 15 },
   addPlace: { width: 48, minHeight: 105, borderRadius: 17, borderWidth: 1, borderStyle: "dashed", borderColor: colors.blue, alignItems: "center", justifyContent: "center" },
   planButton: { marginTop: 22 },
+  adSlot: { marginTop: 26, borderTopWidth: 1, borderColor: colors.border, paddingTop: 14 },
   tripNotice: { marginTop: 18, padding: 13, borderRadius: 16, backgroundColor: colors.blueSoft, flexDirection: "row", alignItems: "center", gap: 10 },
   liveDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.green },
   tripNoticeTitle: { color: colors.text, fontSize: 13, fontWeight: "700" },
