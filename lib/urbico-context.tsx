@@ -105,6 +105,10 @@ type UrbicoState = {
   hydrateFromCloud: (payload: CloudSyncPayload) => void;
   sendMessage: (text: string) => void;
   addNorbyMessage: (text: string) => void;
+  // FIX: botão "limpar conversa" do Norby — reseta só as mensagens do chat
+  // de volta à saudação inicial. Não mexe em conta, favoritos, agenda,
+  // preferências nem qualquer outro dado (ver app/(tabs)/norby.tsx).
+  clearMessages: () => void;
   addCrowdReport: (level: CrowdLevel) => void;
   startTrip: () => void;
   endTrip: () => void;
@@ -131,14 +135,16 @@ function nextMessageId(prefix: string) {
   return `${prefix}-${Date.now()}-${messageIdCounter}`;
 }
 
-const initialMessages: ChatMessage[] = [
-  {
-    id: "norby-welcome",
-    role: "assistant",
-    content: "Olá, sou o Norby. Diga para onde vamos e eu organizo sua próxima decisão.",
-    createdAt: Date.now(),
-  },
-];
+function createInitialMessages(): ChatMessage[] {
+  return [
+    {
+      id: "norby-welcome",
+      role: "assistant",
+      content: "Olá, sou o Norby. Diga para onde vamos e eu organizo sua próxima decisão.",
+      createdAt: Date.now(),
+    },
+  ];
+}
 
 const UrbicoContext = createContext<UrbicoState | undefined>(undefined);
 
@@ -148,7 +154,7 @@ export function UrbicoProvider({ children }: { children: ReactNode }) {
     { id: "work", label: "Trabalho", address: "Defina seu endereço" },
   ]);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
-  const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
+  const [messages, setMessages] = useState<ChatMessage[]>(createInitialMessages);
   const [crowdReports, setCrowdReports] = useState<CrowdLevel[]>([]);
   const [tripHistory, setTripHistory] = useState<TripRecord[]>([]);
   const [isTripActive, setIsTripActive] = useState(false);
@@ -165,7 +171,7 @@ export function UrbicoProvider({ children }: { children: ReactNode }) {
     AsyncStorage.getItem(STORAGE_KEY)
       .then((stored) => {
         if (!stored) return;
-        const parsed = JSON.parse(stored) as Partial<Omit<UrbicoState, "addFavorite" | "updateFavorite" | "removeFavorite" | "addAppointment" | "removeAppointment" | "setAppointmentGoogleEventId" | "hydrateFromCloud" | "sendMessage" | "addNorbyMessage" | "addCrowdReport" | "startTrip" | "endTrip" | "setNotificationsEnabled" | "setVoiceEnabled" | "setActiveRoute" | "setCurrentLocation" | "setLocationSharingEnabled" | "addTrustedContact" | "removeTrustedContact" | "setSafeModeEnabled">>;
+        const parsed = JSON.parse(stored) as Partial<Omit<UrbicoState, "addFavorite" | "updateFavorite" | "removeFavorite" | "addAppointment" | "removeAppointment" | "setAppointmentGoogleEventId" | "hydrateFromCloud" | "sendMessage" | "addNorbyMessage" | "clearMessages" | "addCrowdReport" | "startTrip" | "endTrip" | "setNotificationsEnabled" | "setVoiceEnabled" | "setActiveRoute" | "setCurrentLocation" | "setLocationSharingEnabled" | "addTrustedContact" | "removeTrustedContact" | "setSafeModeEnabled">>;
         if (parsed.favorites) setFavorites(parsed.favorites);
         if (parsed.appointments) setAppointments(parsed.appointments);
         if (parsed.messages) {
@@ -249,6 +255,7 @@ export function UrbicoProvider({ children }: { children: ReactNode }) {
         if (!trimmed) return;
         setMessages((current) => [...current, { id: nextMessageId("norby"), role: "assistant", content: trimmed, createdAt: Date.now() }]);
       },
+      clearMessages: () => setMessages(createInitialMessages()),
       addCrowdReport: (level) => setCrowdReports((current) => [...current, level]),
       startTrip: () => setIsTripActive(true),
       endTrip: () => {
