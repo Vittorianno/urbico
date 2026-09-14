@@ -13,6 +13,16 @@ const env = {
   androidPackage: "com.app.urbico",
 };
 
+// FIX (AdMob): IDs de APP de TESTE oficiais do Google — documentados
+// publicamente em https://developers.google.com/admob/android/test-ads e
+// .../ios/test-ads, não são segredo nenhum. Usados como fallback sempre que
+// EXPO_PUBLIC_ADMOB_ANDROID_APP_ID/EXPO_PUBLIC_ADMOB_IOS_APP_ID não estiverem
+// definidos — assim o app builda e mostra anúncios de teste mesmo antes de
+// você ter uma conta AdMob própria. Troque para os seus IDs reais (do
+// AdMob Console → Apps → seu app → ID do app) no .env quando tiver.
+const GOOGLE_TEST_ANDROID_APP_ID = "ca-app-pub-3940256099942544~3347511713";
+const GOOGLE_TEST_IOS_APP_ID = "ca-app-pub-3940256099942544~1458002511";
+
 const config: ExpoConfig = {
   name: env.appName,
   slug: env.appSlug,
@@ -121,6 +131,19 @@ const config: ExpoConfig = {
         dark: {
           backgroundColor: "#000000",
         },
+      },
+    ],
+    // FIX (AdMob): plugin de config nativo do react-native-google-mobile-ads
+    // — precisa rodar `npx expo install react-native-google-mobile-ads` e
+    // depois `pnpm expo prebuild` (ou um build EAS) para os IDs abaixo
+    // entrarem de fato no AndroidManifest.xml/Info.plist; não tem efeito no
+    // preview web nem no Expo Go, só em development build nativo. Ver
+    // components/ad-banner.tsx para o componente de anúncio em si.
+    [
+      "react-native-google-mobile-ads",
+      {
+        androidAppId: process.env.EXPO_PUBLIC_ADMOB_ANDROID_APP_ID ?? GOOGLE_TEST_ANDROID_APP_ID,
+        iosAppId: process.env.EXPO_PUBLIC_ADMOB_IOS_APP_ID ?? GOOGLE_TEST_IOS_APP_ID,
       },
     ],
     [
