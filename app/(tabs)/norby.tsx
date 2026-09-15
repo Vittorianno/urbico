@@ -7,8 +7,10 @@ import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from "expo-spe
 import { ScreenContainer } from "@/components/screen-container";
 import { UrbicoMap } from "@/components/urbico-map";
 import { colors } from "@/components/urbico-ui";
+import { analytics } from "@/lib/analytics";
 import { useUrbico } from "@/lib/urbico-context";
-import { parseCrowdLevelFromText } from "@/lib/urbico-logic";
+import { classifyNorbyIntent, parseCrowdLevelFromText } from "@/lib/urbico-logic";
+import { NORBY_UNSUPPORTED_INTENTS } from "@/lib/norby-intents";
 import { speakNorby, stopNorbyVoice } from "@/lib/norby-voice";
 import { trpc } from "@/lib/trpc";
 
@@ -51,6 +53,12 @@ export default function NorbyScreen() {
   const chatMutation = trpc.norby.chat.useMutation();
   const crowdSubmitMutation = trpc.crowdReports.submit.useMutation();
 
+  // FIX (analytics): norby_opened uma vez por montagem da tela — ver
+  // docs/analytics.md.
+  useEffect(() => {
+    analytics.track("norby_opened");
+  }, []);
+
   // FIX: a lotação não tem mais uma tela dedicada (app/crowd-report.tsx,
   // removida) — agora sou eu quem pergunta durante a viagem, por voz ou
   // texto, e computo a resposta. Assim que uma linha fica ativa numa
@@ -79,6 +87,22 @@ export default function NorbyScreen() {
     setDraft("");
     setShowConversation(true);
 
+    // FIX (analytics): toda mensagem enviada ao Norby vira um evento
+    // norby_command com a intenção classificada (nunca o texto em si, salvo
+    // a exceção documentada em docs/analytics.md) e o resultado real da
+    // solicitação — ver lib/urbico-logic.ts (classifyNorbyIntent) e
+    // lib/norby-intents.ts.
+    const startedAt = Date.now();
+    const classification = classifyNorbyIntent(message);
+    const trackCommand = (status: "success" | "failure" | "unsupported") =>
+      analytics.track("norby_command", {
+        intent: classification.intent,
+        subintent: classification.subintent,
+        context: classification.context,
+        status,
+        durationMs: Date.now() - startedAt,
+      });
+
     if (awaitingCrowdRef.current) {
       const level = parseCrowdLevelFromText(message);
       if (level) {
@@ -95,6 +119,7 @@ export default function NorbyScreen() {
         const confirmation = `Obrigado! Marquei a lotação como "${level}". Isso ajuda outras pessoas que forem pegar essa linha agora.`;
         addNorbyMessage(confirmation);
         if (voiceEnabled) void speakNorby(confirmation);
+        trackCommand("success");
         return;
       }
       // Não reconheci como resposta sobre lotação — paro de esperar por ela
@@ -102,12 +127,26 @@ export default function NorbyScreen() {
       awaitingCrowdRef.current = false;
     }
 
+    // Intenção reconhecida, mas para a qual o Urbico ainda não tem
+    // funcionalidade de verdade (ex.: notificação de chegada) — status
+    // "unsupported", diferente de "unknown" (não entendi) ou "failure"
+    // (entendi e tentei, mas deu erro).
+    if (NORBY_UNSUPPORTED_INTENTS.includes(classification.intent) || classification.subintent === "arrival_notification") {
+      const reply = "Ainda não tenho um jeito de te avisar quando o ônibus estiver chegando, mas guardei esse pedido — é algo que pode virar uma funcionalidade futura.";
+      addNorbyMessage(reply);
+      if (voiceEnabled) void speakNorby(reply);
+      trackCommand("unsupported");
+      return;
+    }
+
     try {
       const response = await chatMutation.mutateAsync({ message });
       addNorbyMessage(response.message);
       if (voiceEnabled) void speakNorby(response.message);
+      trackCommand("success");
     } catch {
       addNorbyMessage("Não consegui consultar o serviço do Norby agora. Tente novamente em instantes.");
+      trackCommand("failure");
     }
   };
 
