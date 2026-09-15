@@ -1,6 +1,6 @@
 import { and, count, desc, eq, gt, gte, inArray, isNull, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { crowdReports, departureAlerts, googleCalendarAccounts, InsertDepartureAlert, InsertUser, userDataSync, users } from "../drizzle/schema";
+import { analyticsEvents, crowdReports, departureAlerts, googleCalendarAccounts, InsertAnalyticsEvent, InsertDepartureAlert, InsertUser, userDataSync, users } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -305,4 +305,15 @@ export async function saveUserDataSync(openId: string, payload: string) {
   const db = await getDb();
   if (!db) throw new Error("Banco de dados indisponível para sincronizar seus dados.");
   await db.insert(userDataSync).values({ openId, payload }).onDuplicateKeyUpdate({ set: { payload } });
+}
+
+// ---------------------------------------------------------------------------
+// Analytics/Telemetria — ver drizzle/schema.ts (analyticsEvents) e
+// docs/analytics.md. Falha ao gravar um evento nunca deve quebrar a ação
+// real da pessoa (ex.: buscar uma rota) — por isso esta função nunca lança;
+// quem chama (server/routers.ts) já trata isso como "melhor esforço".
+export async function insertAnalyticsEvent(event: InsertAnalyticsEvent) {
+  const db = await getDb();
+  if (!db) return;
+  await db.insert(analyticsEvents).values(event);
 }
