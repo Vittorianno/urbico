@@ -1,3 +1,4 @@
+import { analytics } from "@/lib/analytics";
 import type { Favorite } from "@/lib/urbico-context";
 
 /**
@@ -13,8 +14,15 @@ export function isFavoriteConfigured(favorite: Pick<Favorite, "latitude" | "long
  * Parâmetros de navegação para "ir até este favorito" (REGRA 1). Usar sempre
  * que o toque principal num favorito configurado precisar abrir Rotas com o
  * destino pronto, em vez de duplicar esse objeto em cada tela.
+ *
+ * FIX (analytics): como esta função é chamada exatamente no único momento
+ * em que "usar um favorito" acontece de verdade (Home e Locais salvos, ver
+ * REGRA 5), é o lugar certo — e único — para registrar o evento
+ * `favorite_used`, em vez de duplicar a chamada de analytics em cada tela
+ * que usa favoritos.
  */
 export function favoriteRouteParams(favorite: Favorite) {
+  analytics.track("favorite_used", { favoriteId: favorite.id, label: favorite.label });
   return {
     pathname: "/routes" as const,
     params: {
