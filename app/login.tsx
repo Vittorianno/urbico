@@ -19,6 +19,7 @@ import { ScreenContainer } from "@/components/screen-container";
 import { colors, PrimaryButton } from "@/components/urbico-ui";
 import { useAuth } from "@/hooks/use-auth";
 import * as Api from "@/lib/_core/api";
+import { analytics } from "@/lib/analytics";
 import { supabase } from "@/lib/_core/supabase";
 
 type Mode = "signIn" | "signUp";
@@ -40,7 +41,10 @@ export default function LoginScreen() {
   // Troca o access token do Supabase pela sessão própria do Urbico (cookie
   // no web, token no SecureStore no nativo) — mesmo passo final para
   // e-mail/senha e para Google, então fica centralizado aqui.
-  const completeUrbicoSession = async (accessToken: string) => {
+  // FIX (analytics): `method` identifica como a sessão foi concluída
+  // ("password" | "google"), registrado como user_login — ponto único de
+  // login com sucesso, independente do caminho que levou até aqui.
+  const completeUrbicoSession = async (accessToken: string, method: "password" | "google") => {
     const established = await Api.establishSession(accessToken);
     if (!established) {
       Alert.alert("Erro ao entrar", "Não foi possível iniciar a sessão. Tente novamente.");
@@ -50,6 +54,7 @@ export default function LoginScreen() {
       const { setSessionToken } = await import("@/lib/_core/auth");
       await setSessionToken(accessToken);
     }
+    analytics.track("user_login", { method });
     await refresh();
     router.back();
   };
@@ -64,7 +69,7 @@ export default function LoginScreen() {
     const { data: subscription } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === "SIGNED_IN" && session?.access_token) {
         setLoading(true);
-        completeUrbicoSession(session.access_token).finally(() => setLoading(false));
+        completeUrbicoSession(session.access_token, "google").finally(() => setLoading(false));
       }
     });
     return () => subscription.subscription.unsubscribe();
@@ -93,6 +98,8 @@ export default function LoginScreen() {
         return;
       }
 
+      if (isSignUp) analytics.track("user_registered", { method: "password" });
+
       const accessToken = data.session?.access_token;
       if (!accessToken) {
         // Acontece quando o projeto Supabase exige confirmação de e-mail
@@ -106,7 +113,7 @@ export default function LoginScreen() {
         return;
       }
 
-      await completeUrbicoSession(accessToken);
+      await completeUrbicoSession(accessToken, "password");
     } catch (err) {
       Alert.alert("Erro inesperado", err instanceof Error ? err.message : "Tente novamente em instantes.");
     } finally {
