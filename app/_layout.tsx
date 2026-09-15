@@ -19,6 +19,7 @@ import {
 } from "react-native-safe-area-context";
 import type { EdgeInsets, Metrics, Rect } from "react-native-safe-area-context";
 
+import { analytics } from "@/lib/analytics";
 import { trpc, createTRPCClient } from "@/lib/trpc";
 import { initManusRuntime, subscribeSafeAreaInsets } from "@/lib/_core/manus-runtime";
 
@@ -39,6 +40,12 @@ export default function RootLayout() {
   // Initialize Manus runtime for cookie injection from parent container
   useEffect(() => {
     initManusRuntime();
+  }, []);
+
+  // FIX (analytics): app_opened uma única vez por carregamento do app —
+  // ver docs/analytics.md e lib/analytics.ts.
+  useEffect(() => {
+    analytics.track("app_opened");
   }, []);
 
   const handleSafeAreaUpdate = useCallback((metrics: Metrics) => {
