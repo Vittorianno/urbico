@@ -1,5 +1,6 @@
 import * as Api from "@/lib/_core/api";
 import * as Auth from "@/lib/_core/auth";
+import { analytics } from "@/lib/analytics";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Platform } from "react-native";
 
@@ -95,6 +96,10 @@ export function useAuth(options?: UseAuthOptions) {
       console.error("[Auth] Logout API call failed:", err);
       // Continue with logout even if API call fails
     } finally {
+      // FIX (analytics): user_logout registrado aqui — ponto único de
+      // logout do app (ver docs/analytics.md), independente de qual tela
+      // chamou logout().
+      analytics.track("user_logout");
       await Auth.removeSessionToken();
       await Auth.clearUserInfo();
       setUser(null);
