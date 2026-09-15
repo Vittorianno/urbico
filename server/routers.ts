@@ -1,5 +1,6 @@
 import { COOKIE_NAME } from "../shared/const.js";
 import { z } from "zod";
+import { ANALYTICS_EVENTS } from "../lib/analytics-events";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { adminProcedure, protectedProcedure, publicProcedure, router } from "./_core/trpc";
@@ -31,7 +32,8 @@ const crowdLevelSchema = z.enum(["Vazio", "Baixa", "Normal", "Alta", "Lotado"]);
 // (favoritos/compromissos), usados só para validar o payload de
 // userData.push — o formato espelha lib/urbico-context.tsx (Favorite /
 // Appointment), mas fica duplicado aqui de propósito: o schema do tRPC não
-// pode importar tipos de dentro de app/lib do cliente.
+// pode importar tipos de dentro de app/lib do cliente que dependam de
+// React Native (AsyncStorage, hooks etc.) sem quebrar o bundle do servidor.
 const favoriteSyncSchema = z.object({
   id: z.string().min(1).max(80),
   label: z.string().min(1).max(80),
@@ -72,6 +74,45 @@ export const appRouter = router({
   // server/_core/trpc.ts) - qualquer outra pessoa recebe 403.
   admin: router({
     overview: adminProcedure.query(() => db.getAdminOverview()),
+  }),
+  // FIX (analytics): camada centralizada de telemetria — ver
+  // docs/analytics.md e lib/analytics.ts (quem chama isto no cliente).
+  // publicProcedure de propósito: a maior parte do Urbico funciona sem
+  // login, e queremos medir uso anônimo também (ctx.user?.openId entra
+  // quando a pessoa está logada, fica null quando não está). NUNCA exposto
+  // para leitura aqui — isto só grava; consultar os dados é trabalho do
+  // futuro Urbico Admin, direto no banco ou por endpoints protegidos
+  // próprios, que ainda não existem de propósito (ver docs/analytics.md).
+  analytics: router({
+    track: publicProcedure
+      .input(
+        z.object({
+          event: z.enum(ANALYTICS_EVENTS),
+          properties: z.record(z.string(), z.unknown()).optional(),
+          installationId: z.string().max(64).optional(),
+          sessionId: z.string().max(64).optional(),
+          platform: z.string().max(16).optional(),
+          appVersion: z.string().max(32).optional(),
+        }),
+      )
+      .mutation(async ({ ctx, input }) => {
+        try {
+          await db.insertAnalyticsEvent({
+            event: input.event,
+            openId: ctx.user?.openId ?? null,
+            installationId: input.installationId ?? null,
+            sessionId: input.sessionId ?? null,
+            platform: input.platform ?? null,
+            appVersion: input.appVersion ?? null,
+            properties: input.properties ? JSON.stringify(input.properties) : null,
+          });
+        } catch (error) {
+          // Melhor esforço: analytics nunca pode quebrar a ação real da
+          // pessoa nem virar erro visível no app.
+          console.warn("[analytics] falha ao gravar evento:", error);
+        }
+        return { tracked: true };
+      }),
   }),
   transit: router({
     searchLines: publicProcedure.input(z.object({ term: z.string().trim().min(2).max(60) })).query(({ input }) => safeIntegration(() => searchLines(input.term))),
