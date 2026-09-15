@@ -7,6 +7,7 @@ import { AddressAutocomplete, type AddressSuggestion } from "@/components/addres
 import { CrowdLevelBadge } from "@/components/crowd-level";
 import { ScreenContainer } from "@/components/screen-container";
 import { colors, PrimaryButton, SectionTitle } from "@/components/urbico-ui";
+import { analytics } from "@/lib/analytics";
 import { getCurrentUrbicoLocation } from "@/lib/location-service";
 import { useUrbico } from "@/lib/urbico-context";
 import { trpc } from "@/lib/trpc";
@@ -61,8 +62,17 @@ export default function RoutesScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.destination]);
 
+  const selectLine = (line: { id: number; label: string; origin: string; destination: string }) => {
+    setSelectedLine(line);
+    analytics.track("route_selected", { lineId: line.id, lineLabel: line.label });
+  };
+
   const start = async () => {
     if (!ready) return;
+    // FIX (analytics): route_search no momento em que a pessoa efetivamente
+    // pede pra calcular a rota (não a cada tecla digitada) — ver
+    // docs/analytics.md.
+    analytics.track("route_search", { hasCoordinates: Boolean(originPlace && destinationPlace), hasLine: Boolean(selectedLine) });
     try {
       const result = await routeMutation.mutateAsync({
         origin,
@@ -90,6 +100,7 @@ export default function RoutesScreen() {
         line: selectedLine,
       });
       startTrip();
+      analytics.track("route_started", { hasLine: Boolean(selectedLine), distanceMeters: Math.round(result.route.distanceMeters) });
       router.push("/trip");
     } catch {
       return;
@@ -102,7 +113,7 @@ export default function RoutesScreen() {
         <View style={styles.top}><Pressable onPress={() => router.back()} style={({ pressed }) => [styles.back, pressed && styles.pressed]}><MaterialIcons name="arrow-back" size={22} color={colors.text} /></Pressable><Text style={styles.title}>Rotas</Text><MaterialIcons name="more-vert" size={23} color={colors.text} /></View>
         <View style={styles.form}><View style={styles.addressLabelRow}><Text style={styles.fieldLabel}>De</Text><AddressAutocomplete value={origin} onChangeText={(text) => { setOrigin(text); setOriginPlace(null); }} onSelect={(place) => { setOriginPlace(place); setOrigin(place.address); }} placeholder={locatingOrigin ? "Localizando..." : "Minha localização ou endereço"} compact /></View><View style={styles.divider} /><View style={styles.addressLabelRow}><Text style={styles.fieldLabel}>Para</Text><AddressAutocomplete value={destination} onChangeText={(text) => { setDestination(text); setDestinationPlace(null); }} onSelect={(place) => { setDestinationPlace(place); setDestination(place.address); }} onSubmit={() => void start()} placeholder="Digite um endereço" compact /></View><Pressable onPress={() => { const previousOrigin = origin; const previousDestination = destination; const previousOriginPlace = originPlace; setOrigin(previousDestination); setDestination(previousOrigin); setOriginPlace(destinationPlace); setDestinationPlace(previousOriginPlace); }} style={({ pressed }) => [styles.swap, pressed && styles.pressed]}><MaterialIcons name="swap-vert" size={19} color={colors.text} /></Pressable></View>
         {originError ? <Text style={styles.originError}>{originError} Informe a origem manualmente.</Text> : null}
-        {lineSearch.data?.length ? <View style={styles.lineResults}><Text style={styles.resultLabel}>Linha para acompanhar no mapa</Text><FlatList data={lineSearch.data.slice(0, 3)} scrollEnabled={false} keyExtractor={(item) => String(item.id)} renderItem={({ item }) => <Pressable onPress={() => setSelectedLine(item)} style={({ pressed }) => [styles.lineResult, selectedLine?.id === item.id && styles.lineSelected, pressed && styles.pressed]}><MaterialIcons name="directions-bus" size={18} color={colors.blue} /><View style={{ flex: 1 }}><Text style={styles.lineName}>{item.label} · {item.destination}</Text><Text style={styles.lineMeta}>{item.origin}</Text><View style={styles.lineCrowd}><CrowdLevelBadge level={crowdBatchQuery.data?.[item.id]?.level ?? null} compact /></View></View>{selectedLine?.id === item.id ? <MaterialIcons name="check-circle" size={19} color={colors.cyan} /> : null}</Pressable>} /></View> : null}
+        {lineSearch.data?.length ? <View style={styles.lineResults}><Text style={styles.resultLabel}>Linha para acompanhar no mapa</Text><FlatList data={lineSearch.data.slice(0, 3)} scrollEnabled={false} keyExtractor={(item) => String(item.id)} renderItem={({ item }) => <Pressable onPress={() => selectLine(item)} style={({ pressed }) => [styles.lineResult, selectedLine?.id === item.id && styles.lineSelected, pressed && styles.pressed]}><MaterialIcons name="directions-bus" size={18} color={colors.blue} /><View style={{ flex: 1 }}><Text style={styles.lineName}>{item.label} · {item.destination}</Text><Text style={styles.lineMeta}>{item.origin}</Text><View style={styles.lineCrowd}><CrowdLevelBadge level={crowdBatchQuery.data?.[item.id]?.level ?? null} compact /></View></View>{selectedLine?.id === item.id ? <MaterialIcons name="check-circle" size={19} color={colors.cyan} /> : null}</Pressable>} /></View> : null}
         <View style={styles.modeRow}><View style={styles.modeActive}><MaterialIcons name="directions-bus" size={20} color={colors.blue} /></View><View style={styles.mode}><MaterialIcons name="directions-car" size={20} color={colors.muted} /></View><View style={styles.mode}><MaterialIcons name="directions-walk" size={20} color={colors.muted} /></View></View>
         <SectionTitle title="Opções" />
         <View style={[styles.routeCard, styles.bestRoute]}><View style={styles.routeHeader}><Text style={styles.routeCardTitle}>{plannedRoute ? "Melhor rota a pé" : "Melhor rota"}</Text><Text style={styles.routeCardTime}>{routeMutation.isPending ? "Calculando" : walkingMinutes ? `${walkingMinutes} min` : "Aguardando"}</Text></View><Text style={styles.routeCardText}>{plannedRoute ? `${Math.round(plannedRoute.distanceMeters)} m · ${plannedRoute.instructions.length} instruções para chegar ao destino.` : routeMutation.error ? "Não foi possível calcular esta rota. Revise os endereços e tente novamente." : ready && routingStatus.data && !routingStatus.data.routingAvailable ? "Rota automática indisponível neste protótipo. Digite os endereços manualmente; o acompanhamento SPTrans continua disponível quando uma linha for selecionada." : ready ? "A origem e o destino estão prontos para consulta segura no serviço de rotas." : "Informe origem e destino para organizar caminhada, ônibus e conexões."}</Text><View style={styles.steps}><Step icon="directions-walk" label="Caminhada" /><View style={styles.stepLine} /><Step icon="directions-bus" label="Transporte" /><View style={styles.stepLine} /><Step icon="directions-walk" label="Chegada" /></View></View>
