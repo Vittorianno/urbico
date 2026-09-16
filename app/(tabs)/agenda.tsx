@@ -1,11 +1,12 @@
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Alert, FlatList, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { AddressAutocomplete, type AddressSuggestion } from "@/components/address-autocomplete";
 import { DateInput } from "@/components/date-input";
 import { ScreenContainer } from "@/components/screen-container";
 import { colors, PrimaryButton } from "@/components/urbico-ui";
+import { analytics } from "@/lib/analytics";
 import { useUrbico } from "@/lib/urbico-context";
 import { getInstallationId, startDepartureLocationUpdates } from "@/lib/departure-location-task";
 import { getCurrentUrbicoLocation } from "@/lib/location-service";
@@ -40,6 +41,13 @@ export default function AgendaScreen() {
   // nenhuma UI própria aqui — ver comentário acima).
   const googleStatus = trpc.googleCalendar.status.useQuery(undefined, { enabled: isAuthenticated });
   const pushToGoogle = trpc.googleCalendar.pushAppointment.useMutation();
+
+  // FIX (analytics): calendar_opened uma vez por montagem da tela — ver
+  // docs/analytics.md.
+  useEffect(() => {
+    analytics.track("calendar_opened");
+  }, []);
+
   const armAlert = async (input: { title: string; date: string; time: string; latitude: number; longitude: number; lineId: number }) => {
     const appointmentAt = new Date(`${input.date}T${input.time}:00`);
     if (Number.isNaN(appointmentAt.getTime())) { Alert.alert("Formato de data", "Use uma data válida (DD/MM/AAAA) e hora no formato HH:MM para ativar o alerta."); return; }
@@ -55,6 +63,7 @@ export default function AgendaScreen() {
       await armMutation.mutateAsync({ installationId, appointmentLabel: input.title, appointmentAt, lineId: input.lineId, destinationLatitude: input.latitude, destinationLongitude: input.longitude, latitude: current.latitude, longitude: current.longitude, locationConsented: true });
       await startDepartureLocationUpdates(installationId);
       setLocationSharingEnabled(true);
+      analytics.track("alert_created", { lineId: input.lineId });
       Alert.alert(
         "Alerta ativado",
         notificationsEnabled
@@ -67,6 +76,7 @@ export default function AgendaScreen() {
     if (!title.trim() || !date.trim() || !time.trim() || !address.trim()) return;
     const appointment = { title: title.trim(), date: date.trim(), time: time.trim(), address: address.trim(), latitude: place?.latitude, longitude: place?.longitude, relevantLineId: line?.id, relevantLineLabel: line?.label, alertsEnabled: Boolean(line && place) };
     const appointmentId = addAppointment(appointment);
+    analytics.track("calendar_event_created", { hasLine: Boolean(line), hasCoordinates: Boolean(place) });
     if (line && place) Alert.alert("Ativar alerta de saída?", "Com sua permissão, o Urbico enviará atualizações de localização ao servidor enquanto este alerta estiver ativo. Você poderá revogar a qualquer momento.", [{ text: "Agora não", style: "cancel" }, { text: "Ativar alerta", onPress: () => void armAlert({ title: appointment.title, date: appointment.date, time: appointment.time, latitude: place.latitude, longitude: place.longitude, lineId: line.id }) }]);
     // Melhor esforço, sem nenhuma UI: se a conta Google já estiver conectada
     // (feita e visível só no Perfil), o compromisso é replicado por trás.
