@@ -52,7 +52,20 @@ export async function evaluateDepartureAlerts(now = new Date()) {
         busRideSeconds,
         finalWalkingSeconds,
       });
-      if (evaluation.shouldLeave) await db.markDepartureAlertSent(alert.id);
+      if (evaluation.shouldLeave) {
+        await db.markDepartureAlertSent(alert.id);
+        // FIX (analytics): alert_triggered — o único evento do catálogo
+        // disparado no servidor (não no app), porque é exatamente aqui,
+        // num job em segundo plano, que o Urbico decide "hora de sair" (ver
+        // docs/analytics.md). installationId é o mesmo já usado pelo alerta
+        // em si; sem openId, já que alertas de saída são anônimos por
+        // dispositivo (ver drizzle/schema.ts, departureAlerts).
+        await db.insertAnalyticsEvent({
+          event: "alert_triggered",
+          installationId: alert.installationId,
+          properties: JSON.stringify({ lineId: alert.lineId, confidence: evaluation.confidence }),
+        });
+      }
       results.push({ id: alert.id, shouldLeave: evaluation.shouldLeave, reason: evaluation.confidence });
     } catch {
       results.push({ id: alert.id, shouldLeave: false, reason: "dados de mobilidade indisponíveis" });
