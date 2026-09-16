@@ -6,6 +6,7 @@ import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
 import { ScreenContainer } from "@/components/screen-container";
 import { colors, InfoCard, PrimaryButton } from "@/components/urbico-ui";
 import { UrbicoMap } from "@/components/urbico-map";
+import { analytics } from "@/lib/analytics";
 import { getCurrentUrbicoLocation } from "@/lib/location-service";
 import { useUrbico } from "@/lib/urbico-context";
 import { trpc } from "@/lib/trpc";
@@ -19,6 +20,9 @@ export default function MapScreen() {
   const vehicles = useMemo(() => (selected?.vehicles ?? []).map((vehicle) => ({ id: vehicle.prefix, label: `Veículo ${vehicle.prefix}`, latitude: vehicle.latitude, longitude: vehicle.longitude })), [selected?.vehicles]);
   const stops = useMemo(() => (selected?.stops ?? []).map((stop) => ({ id: String(stop.id), label: stop.name, latitude: stop.latitude, longitude: stop.longitude })), [selected?.stops]);
   useEffect(() => { if (currentLocation) setCenter(currentLocation); }, [currentLocation]);
+  // FIX (analytics): map_opened uma vez por montagem da tela — ver
+  // docs/analytics.md.
+  useEffect(() => { analytics.track("map_opened"); }, []);
   const locate = async () => {
     try {
       const position = await getCurrentUrbicoLocation();
