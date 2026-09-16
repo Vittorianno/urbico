@@ -119,6 +119,9 @@ export default function NorbyScreen() {
         const confirmation = `Obrigado! Marquei a lotação como "${level}". Isso ajuda outras pessoas que forem pegar essa linha agora.`;
         addNorbyMessage(confirmation);
         if (voiceEnabled) void speakNorby(confirmation);
+        // FIX (analytics): crowd_report_created, além do norby_command
+        // (intent "crowding") já registrado abaixo — ver docs/analytics.md.
+        if (lineId) analytics.track("crowd_report_created", { lineId, level });
         trackCommand("success");
         return;
       }
