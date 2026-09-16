@@ -27,7 +27,10 @@ tabela nova a cada novo tipo de evento.
    abaixo.
 3. Chame `analytics.track("seu_evento", { ...propriedades })` no ponto do
    código onde a ação acontece de verdade — nunca espalhe chamadas de rede
-   de analytics por fora de `lib/analytics.ts`.
+   de analytics por fora de `lib/analytics.ts`. Exceção: eventos que
+   acontecem num job em segundo plano do servidor (sem nenhum app aberto
+   no momento, ex.: `alert_triggered`) chamam `db.insertAnalyticsEvent`
+   diretamente — ver `server/leave-alert-monitor.ts`.
 
 `analytics.track()` é assíncrono, "melhor esforço" e nunca lança: falha em
 telemetria (sem rede, banco fora do ar) nunca pode quebrar a ação real da
@@ -51,9 +54,9 @@ pessoa.
 | `calendar_opened` | `app/(tabs)/agenda.tsx`, montagem da tela | — |
 | `calendar_event_created` | `app/(tabs)/agenda.tsx`, compromisso salvo | `{ hasLine: boolean, hasCoordinates: boolean }` |
 | `alert_created` | `app/(tabs)/agenda.tsx`, alerta de saída armado com sucesso | `{ lineId }` |
-| `alert_triggered` | catalogado, ainda não emitido — ver "Próximos passos" | `{ lineId }` |
-| `crowd_report_created` | catalogado, ainda não emitido | `{ lineId, level }` |
-| `crowd_report_viewed` | catalogado, ainda não emitido | `{ lineId }` |
+| `alert_triggered` | `server/leave-alert-monitor.ts` — único evento disparado no servidor, no job em segundo plano que decide "hora de sair" | `{ lineId, confidence }` |
+| `crowd_report_created` | `app/(tabs)/norby.tsx`, resposta de lotação reconhecida durante a viagem | `{ lineId, level }` |
+| `crowd_report_viewed` | catalogado, ainda não emitido — ver "Próximos passos" | `{ lineId }` |
 | `norby_opened` | `app/(tabs)/norby.tsx`, montagem da tela | — |
 | `norby_command` | `app/(tabs)/norby.tsx`, toda mensagem enviada ao Norby | `{ intent, subintent?, context?, status, durationMs }` — ver seção Norby |
 | `ad_impression` | `components/ad-banner.tsx`, anúncio carregado | — |
@@ -102,7 +105,7 @@ passos".
 2. Adicione as palavras-chave correspondentes em `NORBY_INTENT_PATTERNS`
    (ou `NORBY_SUBINTENT_PATTERNS`) em `lib/urbico-logic.ts`.
 3. Se a intenção representa algo que o Urbico ainda não faz de verdade,
-   adicione-a a `NORBY_UNSUPPORTED_INTENTS` para que aaentre como
+   adicione-a a `NORBY_UNSUPPORTED_INTENTS` para que ela entre como
    `status: "unsupported"` em vez de `"unknown"`.
 
 ## Usuários e sessões
@@ -160,10 +163,8 @@ real.
 - Papel `creator` (já existe na coluna `role` de `users`) com permissões
   acima de `admin` — ainda sem nenhuma verificação de acesso usando esse
   valor.
-- Eventos catalogados mas ainda não emitidos: `alert_triggered` (quando o
-  servidor decide "hora de sair" — ver `server/leave-alert-monitor.ts`),
-  `crowd_report_created`/`crowd_report_viewed` (fluxo de lotação pelo
-  Norby), `bus_details_viewed`, `route_details_viewed`.
+- Eventos catalogados mas ainda não emitidos: `crowd_report_viewed`,
+  `bus_details_viewed`, `route_details_viewed`.
 - Detecção de "demandas incomuns" (agrupar solicitações `unknown`
   semanticamente parecidas) — hoje os dados ficam estruturados e prontos
   para isso, mas nenhum processamento de agrupamento existe ainda (ver
