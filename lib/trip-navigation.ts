@@ -239,13 +239,25 @@ export function useTripNavigation() {
     return null;
   }, [currentLocation, phase, boardingStop, alightingStop, activeRoute]);
 
+  // FIX (tratamento de erros — item 20 do briefing de navegação): antes,
+  // uma falha na SPTrans (linha/veículos indisponíveis) simplesmente
+  // resultava em boardingStop/trackedVehicle nulos, sem diferenciar "ainda
+  // carregando", "sem dado real disponível agora" e "a API está fora do
+  // ar". Exposto aqui para a tela (app/trip.tsx) mostrar um estado claro em
+  // vez de deixar a pessoa sem explicação.
+  const sptransUnavailable = stopsQuery.isError || vehiclesQuery.isError;
+  const stopsAvailable = Boolean(stopsQuery.data?.length);
+  const noVehicleTracked = stopsAvailable && !vehiclesQuery.isLoading && !trackedVehicle;
+
   return {
     phase,
     boardingStop,
     alightingStop,
     trackedVehicle,
     linePrediction,
-    stopsAvailable: Boolean(stopsQuery.data?.length),
+    stopsAvailable,
+    sptransUnavailable,
+    noVehicleTracked,
     watchError,
     reroutedPoints,
     distanceToNext,
