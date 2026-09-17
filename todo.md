@@ -16,7 +16,7 @@
 - [x] Integrar dados oficiais da SPTrans somente após receber token rotacionado por canal seguro.
 - [x] Integrar mapa e roteamento somente após receber chaves rotacionadas e restritas por canal seguro.
 - [x] Implementar a IA remota do Norby no backend após configurar uma credencial segura.
-- [ ] Implementar reconhecimento de voz, síntese remota e notificações de viagem após configurações seguras.
+- [x] Implementar reconhecimento de voz (expo-speech-recognition) e notificações de viagem — "avise quando o ônibus estiver chegando" agora acompanha a posição real do veículo (SPTrans) e avisa por chat+voz+notificação local; síntese remota (ElevenLabs) foi deliberadamente descartada em favor de voz local (ver linha abaixo).
 - [x] Implementar compartilhamento nativo de viagem e contato de confiança.
 - [x] Desenvolver o aplicativo administrativo separado e métricas operacionais.
 - [x] Validar tipagem, fluxos de navegação e persistência local.
@@ -79,3 +79,4 @@
 
 - [x] Tocar num favorito (Home ou Locais salvos) leva direto para Rotas com o destino preenchido, em vez de abrir o formulário em branco.
 - [x] Trocar a exibição de lotação (texto) por pictograma de pessoas, coletado pelo Norby durante a viagem em vez de tela dedicada; lista de linhas em Próximos ônibus mostra a lotação de cada uma.
+- [x] Implementar "avise quando o ônibus estiver chegando" (Norby) usando a posição real do veículo SPTrans durante uma viagem ativa — deixou de ser uma intenção reconhecida sem funcionalidade (NORBY_UNSUPPORTED_INTENTS está vazia).
