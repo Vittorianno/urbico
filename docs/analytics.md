@@ -67,9 +67,10 @@ pessoa.
 | `bus_stop_reached` | `lib/trip-navigation.ts`, chegada real (raio de 30 m) ao ponto de embarque | `{ lineId }` |
 | `bus_boarding_detected` | `lib/trip-navigation.ts`, embarque — por heurística real (velocidade + proximidade ao veículo) ou confirmação manual | `{ lineId, method: "heuristic" \| "manual" }` |
 | `bus_alighting_detected` | `lib/trip-navigation.ts`, desembarque — mesma lógica do embarque | `{ lineId, method: "heuristic" \| "manual" }` |
+| `bus_approaching_detected` | `lib/trip-navigation.ts`, enquanto espera no ponto (`waiting_at_stop`): o veículo real rastreado (posição SPTrans) entra no raio de aproximação do ponto de embarque — é o dado por trás de "avise quando o ônibus estiver chegando" | `{ lineId, distanceMeters }` |
 | `destination_reached` | `lib/trip-navigation.ts`, chegada real (raio de 30 m) ao destino final | `{ lineId }` |
 | `navigation_cancelled` | `app/trip.tsx`, viagem encerrada manualmente antes de chegar ao destino | `{ phase, lineId }` |
-| `norby_navigation_instruction` | `lib/trip-navigation.ts`, toda instrução contextual narrada pelo Norby durante a viagem (chegada ao ponto, embarque, "faltam paradas" etc.) | `{ key, lineId }` — `key` identifica qual instrução (ex.: `"arrived_stop"`, `"boarded"`, `"approaching_destination"`), nunca o texto falado em si |
+| `norby_navigation_instruction` | `lib/trip-navigation.ts`, toda instrução contextual narrada pelo Norby durante a viagem (chegada ao ponto, embarque, "faltam paradas" etc.) | `{ key, lineId }` — `key` identifica qual instrução (ex.: `"arrived_stop"`, `"boarded"`, `"approaching_destination"`, `"bus_approaching"`), nunca o texto falado em si |
 
 ## Norby — intenção estruturada, não o texto
 
@@ -87,13 +88,15 @@ conforme decisão de produto) e vira um evento `norby_command` assim:
   `"arrival_notification"`).
 - **`context`**: `"home" | "work" | "favorite"`, quando detectado.
 - **`status`**:
-  - `"success"` — o Norby respondeu normalmente;
+  - `"success"` — o Norby respondeu normalmente (inclui `subintent:
+    "arrival_notification"` desde que `lib/trip-navigation.ts` passou a
+    avisar de verdade quando o ônibus se aproxima do ponto — ver
+    `bus_approaching_detected` acima; deixou de ser `"unsupported"`);
   - `"failure"` — a chamada ao Norby falhou (erro de rede/serviço);
   - `"unsupported"` — a intenção foi reconhecida, mas o Urbico ainda não
-    tem essa funcionalidade (ver `NORBY_UNSUPPORTED_INTENTS`). É assim
-    que fica registrado, por exemplo, um pedido de "me avise quando o
-    ônibus estiver chegando" — reconhecido, mas sem funcionalidade real
-    por trás ainda.
+    tem essa funcionalidade (ver `NORBY_UNSUPPORTED_INTENTS`, hoje
+    vazia — nenhuma intenção reconhecida está sem funcionalidade real
+    no momento).
 - **`durationMs`**: tempo entre a mensagem ser enviada e a resposta (ou
   falha) chegar.
 
@@ -127,7 +130,9 @@ eventos de navegação da tabela acima nas transições reais de etapa:
 ```
 walking_to_stop → waiting_at_stop → on_bus → walking_to_destination → arrived
    bus_stop_reached   bus_boarding_   bus_alighting_   destination_reached
-                        detected        detected
+                       detected         detected
+                   (+ bus_approaching_detected, se o veículo real
+                    entrar no raio de aproximação antes do embarque)
 ```
 
 Embarque/desembarque combinam uma heurística sobre dados reais (velocidade
@@ -135,7 +140,10 @@ do GPS + proximidade ao veículo real da SPTrans) com confirmação manual da
 pessoa (`method: "manual"` vs `"heuristic"` em `properties`) — nunca há
 posição, ETA ou instrução inventada; quando o dado real não existe (sem
 veículo posicionado, sem SPTrans configurado), o estado correspondente
-fica indisponível em vez de simulado.
+fica indisponível em vez de simulado. O aviso de "ônibus chegando"
+(`bus_approaching_detected`) segue a mesma regra: dispara só a partir da
+posição GPS real do veículo mais próximo do ponto, nunca de uma previsão
+de tempo estimada/inventada.
 
 ## Usuários e sessões
 
