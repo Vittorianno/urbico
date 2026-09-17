@@ -46,6 +46,7 @@ export const ANALYTICS_EVENTS = [
   "bus_boarding_detected",
   "bus_stop_reached",
   "bus_alighting_detected",
+  "bus_approaching_detected",
   "destination_reached",
   "navigation_cancelled",
   "norby_navigation_instruction",
