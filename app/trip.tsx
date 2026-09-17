@@ -1,59 +1,206 @@
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { router } from "expo-router";
-import { Share, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useEffect, useMemo, useState } from "react";
+import { Alert, Pressable, Share, StyleSheet, Text, View } from "react-native";
 
 import { CrowdLevelBadge } from "@/components/crowd-level";
 import { ScreenContainer } from "@/components/screen-container";
-import { colors, InfoCard, PrimaryButton, SecondaryButton } from "@/components/urbico-ui";
-import { useUrbico } from "@/lib/urbico-context";
+import { UrbicoMap } from "@/components/urbico-map";
+import { colors, PrimaryButton, SecondaryButton } from "@/components/urbico-ui";
+import { useTripNavigation, type NavigationPhase } from "@/lib/trip-navigation";
+import { getCurrentUrbicoLocation } from "@/lib/location-service";
 import { trpc } from "@/lib/trpc";
+import { useUrbico } from "@/lib/urbico-context";
+
+function formatDistance(meters: number | null): string {
+  if (meters == null) return "—";
+  if (meters < 1000) return `${Math.round(meters)} m`;
+  return `${(meters / 1000).toFixed(1)} km`;
+}
+
+const STAGE_ICONS = ["directions-walk", "directions-bus", "directions-walk", "flag"] as const;
+const STAGE_LABELS = ["A pé", "Ônibus", "A pé", "Destino"] as const;
+
+function stageIndex(phase: NavigationPhase): number {
+  if (phase === "walking_to_stop" || phase === "waiting_at_stop") return 0;
+  if (phase === "on_bus") return 1;
+  if (phase === "walking_to_destination") return 2;
+  return 3;
+}
 
 export default function TripScreen() {
-  const { crowdReports, activeRoute, endTrip } = useUrbico();
-  const latestCrowd = crowdReports.at(-1) ?? null;
+  const { activeRoute, currentLocation, crowdReports, endTrip, voiceEnabled, setVoiceEnabled } = useUrbico();
+  const nav = useTripNavigation();
+  const [recentering, setRecentering] = useState(false);
   const lineId = activeRoute?.line?.id ?? null;
 
-  // FIX: antes este card só mostrava o ÚLTIMO relato feito pelo próprio
-  // usuário (`crowdReports` local) - nunca a agregação de relatos de outras
-  // pessoas, mesmo o backend já oferecendo isso (`crowdReports.recent`).
-  // Agora, com uma linha ativa, mostra a lotação combinada recente da
-  // linha; sem linha ativa, mantém o fallback local de antes.
-  const crowdSummaryQuery = trpc.crowdReports.recent.useQuery(
-    { lineId: lineId ?? 0 },
-    { enabled: !!lineId, refetchInterval: 60_000 },
-  );
-  const aggregatedLevel = crowdSummaryQuery.data?.level ?? null;
+  const crowdSummaryQuery = trpc.crowdReports.recent.useQuery({ lineId: lineId ?? 0 }, { enabled: Boolean(lineId), refetchInterval: 60_000 });
+  const latestCrowd = crowdReports.at(-1) ?? null;
+  const displayedLevel = lineId ? (crowdSummaryQuery.data?.level ?? null) : latestCrowd;
   const aggregatedCount = crowdSummaryQuery.data?.totalReports ?? 0;
-  const displayedLevel = lineId ? aggregatedLevel : latestCrowd;
+
+  useEffect(() => {
+    if (nav.watchError) Alert.alert("Localização indisponível", nav.watchError);
+  }, [nav.watchError]);
+
+  const mapVehicles = useMemo(() => (nav.trackedVehicle ? [{ id: nav.trackedVehicle.prefix, label: activeRoute?.line ? `Linha ${activeRoute.line.label}` : `Veículo ${nav.trackedVehicle.prefix}`, latitude: nav.trackedVehicle.latitude, longitude: nav.trackedVehicle.longitude }] : []), [nav.trackedVehicle, activeRoute?.line]);
+  const mapStops = useMemo(() => {
+    const stops: { id: string; label: string; latitude: number; longitude: number }[] = [];
+    if (nav.boardingStop) stops.push({ id: `board-${nav.boardingStop.id}`, label: `Embarque · ${nav.boardingStop.name}`, latitude: nav.boardingStop.latitude, longitude: nav.boardingStop.longitude });
+    if (nav.alightingStop) stops.push({ id: `alight-${nav.alightingStop.id}`, label: `Desembarque · ${nav.alightingStop.name}`, latitude: nav.alightingStop.latitude, longitude: nav.alightingStop.longitude });
+    return stops;
+  }, [nav.boardingStop, nav.alightingStop]);
+
+  const mapPath = nav.reroutedPoints ?? activeRoute?.points ?? [];
+  const mapCenter = currentLocation ?? activeRoute?.origin ?? { latitude: -23.55052, longitude: -46.633308 };
+
+  const recenter = async () => {
+    setRecentering(true);
+    try {
+      await getCurrentUrbicoLocation();
+    } catch (error) {
+      Alert.alert("Localização indisponível", error instanceof Error ? error.message : "Não foi possível obter sua localização.");
+    } finally {
+      setRecentering(false);
+    }
+  };
 
   const shareTrip = async () => {
     await Share.share({ message: "Estou acompanhando uma viagem pelo Urbico. Acompanhe meu status pelo aplicativo." });
   };
-  const finish = () => { endTrip(); router.replace("/"); };
 
-  // FIX: a lotação não tem mais uma tela/botão dedicado ("Relatar lotação",
-  // app/crowd-report.tsx — removida). Agora o próprio Norby pergunta sobre
-  // a lotação durante a viagem (por voz ou texto) assim que a linha fica
-  // ativa — ver app/(tabs)/norby.tsx. Este card só exibe o resultado.
-  const crowdHint = lineId
-    ? aggregatedCount > 0
-      ? `Baseado em ${aggregatedCount} relato${aggregatedCount === 1 ? "" : "s"} recente${aggregatedCount === 1 ? "" : "s"} desta linha`
-      : "O Norby vai perguntar sobre a lotação durante a viagem"
-    : latestCrowd
-      ? "Baseado no seu último relato"
-      : "O Norby vai perguntar sobre a lotação durante a viagem";
+  const confirmFinish = () => {
+    Alert.alert("Encerrar viagem?", "O acompanhamento por GPS será interrompido.", [
+      { text: "Cancelar", style: "cancel" },
+      { text: "Encerrar", style: "destructive", onPress: () => { nav.cancel(); endTrip(); router.replace("/"); } },
+    ]);
+  };
+
+  // FIX: sem rota ativa, a tela antes ficava mostrando placeholders vagos
+  // ("Aguardando sua rota") em vez de dizer claramente o que fazer — agora
+  // orienta a pessoa a planejar uma rota primeiro, sem tela vazia.
+  if (!activeRoute) {
+    return (
+      <ScreenContainer>
+        <View style={styles.emptyState}>
+          <MaterialIcons name="map" size={40} color={colors.blue} />
+          <Text style={styles.emptyTitle}>Nenhuma viagem em andamento</Text>
+          <Text style={styles.emptyText}>Planeje uma rota para começar o acompanhamento passo a passo.</Text>
+          <PrimaryButton label="Planejar rota" icon="alt-route" onPress={() => router.replace("/routes")} style={styles.emptyButton} />
+        </View>
+      </ScreenContainer>
+    );
+  }
+
+  const stage = stageIndex(nav.phase);
+  const instruction =
+    nav.phase === "walking_to_stop"
+      ? nav.boardingStop
+        ? `Caminhe ${formatDistance(nav.distanceToNext)} até o ponto${nav.boardingStop.name ? ` (${nav.boardingStop.name})` : ""}.`
+        : "Procurando o ponto de embarque mais próximo da linha selecionada."
+      : nav.phase === "waiting_at_stop"
+        ? nav.trackedVehicle
+          ? `Aguarde no ponto. O ônibus${activeRoute.line ? ` ${activeRoute.line.label}` : ""} está a caminho.`
+          : "Aguarde no ponto. Ainda não localizamos um veículo desta linha em tempo real."
+        : nav.phase === "on_bus"
+          ? nav.alightingStop
+            ? `Você está no ônibus. Desembarque perto de ${nav.alightingStop.name}.`
+            : "Você está no ônibus. Acompanhando o trajeto."
+          : nav.phase === "walking_to_destination"
+            ? `Caminhe ${formatDistance(nav.distanceToNext)} até o destino.`
+            : "Você chegou ao destino.";
 
   return (
     <ScreenContainer>
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.header}><Pressable onPress={() => router.back()} style={({ pressed }) => [styles.back, pressed && styles.pressed]}><MaterialIcons name="arrow-back" size={22} color={colors.text} /></Pressable><Text style={styles.title}>Minha viagem</Text><Pressable onPress={() => void shareTrip()} style={({ pressed }) => [styles.back, pressed && styles.pressed]}><MaterialIcons name="share" size={21} color={colors.text} /></Pressable></View>
-        <InfoCard style={styles.tripCard}><View style={styles.busBox}><MaterialIcons name="directions-bus" size={28} color={colors.blue} /></View><View style={{ flex: 1 }}><Text style={styles.tripTitle}>Preparando acompanhamento</Text><Text style={styles.tripSubtitle}>A linha e o destino aparecem assim que a viagem for identificada.</Text></View></InfoCard>
-        <InfoCard style={styles.nextCard}><Text style={styles.sectionLabel}>PRÓXIMA PARADA</Text><Text style={styles.nextTitle}>Aguardando sua rota</Text><Text style={styles.nextText}>O Norby avisará sobre a próxima parada quando tivermos posição, trajeto e previsão disponíveis.</Text><View style={styles.timeline}><View style={styles.activeLine} /><View style={styles.timelineDotActive} /><View style={[styles.timelineDot, { top: 71 }]} /><View style={[styles.timelineDot, { top: 111 }]} /><View style={[styles.timelineDot, { top: 151 }]} /><View style={styles.timelineCopy}><Text style={styles.timelineHeadline}>Acompanhamento iniciado</Text><Text style={styles.timelineBody}>Você receberá atualizações relevantes, sem excesso de notificações.</Text></View></View></InfoCard>
-        <View style={styles.twoCards}><InfoCard style={styles.smallCard}><View style={styles.smallIcon}><MaterialIcons name="groups" size={20} color={colors.amber} /></View><Text style={styles.smallLabel}>LOTAÇÃO ATUAL</Text><View style={styles.crowdBadgeWrap}><CrowdLevelBadge level={displayedLevel} count={lineId ? aggregatedCount : undefined} compact /></View><Text style={styles.smallHint}>{crowdHint}</Text></InfoCard><InfoCard style={styles.smallCard}><View style={styles.smallIcon}><MaterialIcons name="notifications-active" size={20} color={colors.cyan} /></View><Text style={styles.smallLabel}>NORBY</Text><Text style={styles.smallTitle}>Pronto para ajudar</Text><Text style={styles.smallHint}>Alertas da viagem aparecem aqui.</Text></InfoCard></View>
-        <View style={styles.actions}><SecondaryButton label="Segurança" icon="shield" onPress={() => router.push("/security")} style={{ flex: 1 }} /></View>
-        <PrimaryButton label="ENCERRAR VIAGEM" icon="stop-circle" onPress={finish} style={styles.finish} />
-      </ScrollView>
+      <View style={styles.screen}>
+        <View style={styles.mapWrap}>
+          <UrbicoMap center={mapCenter} userLocation={currentLocation} path={mapPath} vehicles={mapVehicles} stops={mapStops} />
+          <View style={styles.topBar}>
+            <Pressable accessibilityLabel="Voltar" onPress={() => router.back()} style={({ pressed }) => [styles.roundButton, pressed && styles.pressed]}><MaterialIcons name="arrow-back" size={22} color={colors.text} /></Pressable>
+            <View style={styles.topBarActions}>
+              <Pressable accessibilityLabel={voiceEnabled ? "Silenciar Norby" : "Ativar Norby"} onPress={() => setVoiceEnabled(!voiceEnabled)} style={({ pressed }) => [styles.roundButton, pressed && styles.pressed]}><MaterialIcons name={voiceEnabled ? "volume-up" : "volume-off"} size={20} color={colors.text} /></Pressable>
+              <Pressable accessibilityLabel="Compartilhar viagem" onPress={() => void shareTrip()} style={({ pressed }) => [styles.roundButton, pressed && styles.pressed]}><MaterialIcons name="share" size={19} color={colors.text} /></Pressable>
+            </View>
+          </View>
+          <Pressable accessibilityLabel="Centralizar localização" onPress={() => void recenter()} style={({ pressed }) => [styles.recenterButton, pressed && styles.pressed]}>
+            <MaterialIcons name={recentering ? "hourglass-top" : "my-location"} size={22} color={colors.text} />
+          </Pressable>
+        </View>
+
+        <View style={styles.panel}>
+          <View style={styles.stageRow}>
+            {STAGE_ICONS.map((icon, index) => (
+              <View key={icon + index} style={styles.stageItem}>
+                <View style={[styles.stageDot, index === stage && styles.stageDotActive, index < stage && styles.stageDotDone]}>
+                  <MaterialIcons name={icon} size={16} color={index <= stage ? "#FFFFFF" : colors.muted} />
+                </View>
+                <Text style={[styles.stageLabel, index === stage && styles.stageLabelActive]}>{STAGE_LABELS[index]}</Text>
+                {index < STAGE_ICONS.length - 1 ? <View style={[styles.stageConnector, index < stage && styles.stageConnectorDone]} /> : null}
+              </View>
+            ))}
+          </View>
+
+          <Text style={styles.instruction}>{instruction}</Text>
+
+          <View style={styles.metaRow}>
+            <View style={styles.metaItem}>
+              <Text style={styles.metaLabel}>LINHA</Text>
+              <Text style={styles.metaValue}>{activeRoute.line?.label ?? "Sem linha"}</Text>
+            </View>
+            <View style={styles.metaItem}>
+              <Text style={styles.metaLabel}>DISTÂNCIA</Text>
+              <Text style={styles.metaValue}>{formatDistance(nav.distanceToNext)}</Text>
+            </View>
+            <View style={styles.metaItem}>
+              <Text style={styles.metaLabel}>LOTAÇÃO</Text>
+              <CrowdLevelBadge level={displayedLevel} count={lineId ? aggregatedCount : undefined} compact />
+            </View>
+          </View>
+
+          {nav.phase === "waiting_at_stop" ? (
+            <SecondaryButton label="Confirmar embarque" icon="check-circle" onPress={nav.confirmBoarding} style={styles.confirmButton} />
+          ) : nav.phase === "on_bus" ? (
+            <SecondaryButton label="Confirmar desembarque" icon="check-circle" onPress={nav.confirmAlighting} style={styles.confirmButton} />
+          ) : null}
+
+          <View style={styles.actions}>
+            <SecondaryButton label="Segurança" icon="shield" onPress={() => router.push("/security")} style={{ flex: 1 }} />
+            <PrimaryButton label="ENCERRAR" icon="stop-circle" onPress={confirmFinish} style={styles.finishButton} />
+          </View>
+        </View>
+      </View>
     </ScreenContainer>
   );
 }
-const styles = StyleSheet.create({ content: { padding: 20, paddingTop: 10, paddingBottom: 30 }, header: { height: 50, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }, back: { width: 42, height: 42, alignItems: "center", justifyContent: "center" }, title: { color: colors.text, fontSize: 18, fontWeight: "700" }, tripCard: { marginTop: 20, flexDirection: "row", gap: 14, alignItems: "center" }, busBox: { width: 54, height: 54, borderRadius: 15, backgroundColor: colors.blueSoft, alignItems: "center", justifyContent: "center" }, tripTitle: { color: colors.text, fontSize: 16, fontWeight: "700" }, tripSubtitle: { marginTop: 4, color: colors.muted, fontSize: 12, lineHeight: 17 }, nextCard: { marginTop: 14 }, sectionLabel: { color: colors.cyan, fontSize: 10, fontWeight: "800", letterSpacing: 1 }, nextTitle: { marginTop: 7, color: colors.text, fontSize: 20, lineHeight: 26, fontWeight: "700" }, nextText: { marginTop: 5, color: colors.muted, fontSize: 12, lineHeight: 18 }, timeline: { height: 184, marginTop: 18, paddingLeft: 30, position: "relative" }, activeLine: { position: "absolute", top: 7, bottom: 7, left: 7, width: 3, borderRadius: 2, backgroundColor: colors.blue }, timelineDotActive: { position: "absolute", top: 0, left: 0, width: 17, height: 17, borderRadius: 9, backgroundColor: colors.blue, borderWidth: 4, borderColor: "#A5EDFF" }, timelineDot: { position: "absolute", left: 2, width: 13, height: 13, borderRadius: 7, backgroundColor: colors.card, borderWidth: 2, borderColor: colors.muted }, timelineCopy: { paddingTop: 0 }, timelineHeadline: { color: colors.text, fontSize: 14, fontWeight: "700" }, timelineBody: { marginTop: 5, color: colors.muted, fontSize: 12, lineHeight: 18 }, twoCards: { flexDirection: "row", gap: 10, marginTop: 14 }, smallCard: { flex: 1, padding: 14 }, smallIcon: { width: 32, height: 32, borderRadius: 10, backgroundColor: colors.blueSoft, alignItems: "center", justifyContent: "center" }, smallLabel: { marginTop: 12, color: colors.muted, fontSize: 9, fontWeight: "800", letterSpacing: 0.5 }, crowdBadgeWrap: { marginTop: 6 }, smallTitle: { marginTop: 5, color: colors.text, fontSize: 13, lineHeight: 18, fontWeight: "700" }, smallHint: { marginTop: 4, color: colors.muted, fontSize: 10, lineHeight: 14 }, actions: { marginTop: 14, flexDirection: "row", gap: 10 }, finish: { marginTop: 17, backgroundColor: colors.red }, pressed: { opacity: 0.7, transform: [{ scale: 0.98 }] } });
+
+const styles = StyleSheet.create({
+  screen: { flex: 1 },
+  mapWrap: { flex: 1, position: "relative", backgroundColor: "#07111D" },
+  topBar: { position: "absolute", top: 14, left: 14, right: 14, flexDirection: "row", justifyContent: "space-between" },
+  topBarActions: { flexDirection: "row", gap: 8 },
+  roundButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(15,26,41,0.85)", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border },
+  recenterButton: { position: "absolute", right: 14, bottom: 14, width: 46, height: 46, borderRadius: 23, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
+  panel: { padding: 16, paddingBottom: 20, backgroundColor: colors.background, borderTopWidth: 1, borderColor: colors.border },
+  stageRow: { flexDirection: "row", alignItems: "center" },
+  stageItem: { flexDirection: "row", alignItems: "center", flex: 1 },
+  stageDot: { width: 28, height: 28, borderRadius: 14, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
+  stageDotActive: { backgroundColor: colors.blue, borderColor: colors.blue },
+  stageDotDone: { backgroundColor: colors.green, borderColor: colors.green },
+  stageLabel: { marginLeft: 6, color: colors.muted, fontSize: 10, fontWeight: "700" },
+  stageLabelActive: { color: colors.text },
+  stageConnector: { flex: 1, height: 2, backgroundColor: colors.border, marginHorizontal: 4 },
+  stageConnectorDone: { backgroundColor: colors.green },
+  instruction: { marginTop: 16, color: colors.text, fontSize: 17, lineHeight: 23, fontWeight: "700" },
+  metaRow: { marginTop: 14, flexDirection: "row", gap: 10 },
+  metaItem: { flex: 1, padding: 10, borderRadius: 12, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
+  metaLabel: { color: colors.muted, fontSize: 9, fontWeight: "800", letterSpacing: 0.5 },
+  metaValue: { marginTop: 4, color: colors.text, fontSize: 13, fontWeight: "700" },
+  confirmButton: { marginTop: 14 },
+  actions: { marginTop: 14, flexDirection: "row", gap: 10 },
+  finishButton: { flex: 1, backgroundColor: colors.red },
+  pressed: { opacity: 0.7, transform: [{ scale: 0.98 }] },
+  emptyState: { flex: 1, alignItems: "center", justifyContent: "center", padding: 30, gap: 8 },
+  emptyTitle: { color: colors.text, fontSize: 17, fontWeight: "700", marginTop: 6 },
+  emptyText: { color: colors.muted, fontSize: 13, lineHeight: 19, textAlign: "center" },
+  emptyButton: { marginTop: 14 },
+});
