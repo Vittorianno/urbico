@@ -67,7 +67,15 @@ export function useTripNavigation() {
     return closestTo(boardingStop, vehiclesQuery.data)?.item ?? null;
   }, [boardingStop, vehiclesQuery.data]);
 
+  // FIX: getStopPredictions devolve UM objeto (a parada + todas as linhas
+  // que passam nela), não uma lista de previsões — usar isso como array
+  // vazio por padrão estava errado de tipo. Filtramos aqui só a linha da
+  // viagem ativa, que é o único dado real relevante para a navegação.
   const predictionsQuery = trpc.transit.stopPredictions.useQuery({ stopId: boardingStop?.id ?? 0 }, { enabled: Boolean(boardingStop), refetchInterval: 20_000 });
+  const linePrediction = useMemo(() => {
+    if (!line) return null;
+    return predictionsQuery.data?.lines.find((entry) => entry.line.id === line.id) ?? null;
+  }, [predictionsQuery.data, line]);
 
   const announce = (key: string, text: string) => {
     if (announcedRef.current.has(key)) return;
@@ -97,8 +105,8 @@ export function useTripNavigation() {
   };
 
   // Acompanhamento por GPS real: atualiza posição, decide a etapa atual e
-  // detecta desvio de rota. Um único watch por viagem ativa (id do
-  // destino), reiniciado se a rota mudar.
+  // detecta desvio de rota. Um único watch por viagem ativa (destino),
+  // reiniciado se a rota mudar.
   useEffect(() => {
     if (!activeRoute) return;
     let handle: LocationWatchHandle | null = null;
@@ -205,7 +213,7 @@ export function useTripNavigation() {
     boardingStop,
     alightingStop,
     trackedVehicle,
-    predictions: predictionsQuery.data ?? [],
+    linePrediction,
     stopsAvailable: Boolean(stopsQuery.data?.length),
     watchError,
     reroutedPoints,
