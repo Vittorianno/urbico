@@ -39,6 +39,16 @@ export const ANALYTICS_EVENTS = [
   // AdMob
   "ad_impression",
   "ad_clicked",
+  // Urbico Navigation (viagem multimodal em /trip) — ver lib/trip-navigation.ts
+  "navigation_started",
+  "navigation_step_completed",
+  "navigation_rerouted",
+  "bus_boarding_detected",
+  "bus_stop_reached",
+  "bus_alighting_detected",
+  "destination_reached",
+  "navigation_cancelled",
+  "norby_navigation_instruction",
 ] as const;
 
 export type AnalyticsEventName = (typeof ANALYTICS_EVENTS)[number];
