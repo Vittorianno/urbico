@@ -61,6 +61,15 @@ pessoa.
 | `norby_command` | `app/(tabs)/norby.tsx`, toda mensagem enviada ao Norby | `{ intent, subintent?, context?, status, durationMs }` — ver seção Norby |
 | `ad_impression` | `components/ad-banner.tsx`, anúncio carregado | — |
 | `ad_clicked` | `components/ad-banner.tsx`, anúncio tocado/aberto | — |
+| `navigation_started` | `lib/trip-navigation.ts`, início do acompanhamento por GPS de uma viagem ativa | `{ hasLine: boolean }` |
+| `navigation_step_completed` | catalogado, reservado para granularidade futura por trecho (ver "Próximos passos") — hoje as transições reais de etapa já ficam registradas via `bus_stop_reached`/`bus_boarding_detected`/`bus_alighting_detected`/`destination_reached` | `{ step }` |
+| `navigation_rerouted` | `lib/trip-navigation.ts`, recálculo após desvio de rota confirmado (2 leituras de GPS seguidas fora da rota) | `{ reason: "off_route" }` |
+| `bus_stop_reached` | `lib/trip-navigation.ts`, chegada real (raio de 30 m) ao ponto de embarque | `{ lineId }` |
+| `bus_boarding_detected` | `lib/trip-navigation.ts`, embarque — por heurística real (velocidade + proximidade ao veículo) ou confirmação manual | `{ lineId, method: "heuristic" \| "manual" }` |
+| `bus_alighting_detected` | `lib/trip-navigation.ts`, desembarque — mesma lógica do embarque | `{ lineId, method: "heuristic" \| "manual" }` |
+| `destination_reached` | `lib/trip-navigation.ts`, chegada real (raio de 30 m) ao destino final | `{ lineId }` |
+| `navigation_cancelled` | `app/trip.tsx`, viagem encerrada manualmente antes de chegar ao destino | `{ phase, lineId }` |
+| `norby_navigation_instruction` | `lib/trip-navigation.ts`, toda instrução contextual narrada pelo Norby durante a viagem (chegada ao ponto, embarque, "faltam paradas" etc.) | `{ key, lineId }` — `key` identifica qual instrução (ex.: `"arrived_stop"`, `"boarded"`, `"approaching_destination"`), nunca o texto falado em si |
 
 ## Norby — intenção estruturada, não o texto
 
@@ -89,7 +98,9 @@ conforme decisão de produto) e vira um evento `norby_command` assim:
   falha) chegar.
 
 **Nunca o texto da mensagem em si** — a intenção estruturada é
-considerada suficiente (ver Privacidade abaixo).
+considerada suficiente (ver Privacidade abaixo). O mesmo vale para
+`norby_navigation_instruction`: só a `key` da instrução, nunca o texto
+narrado.
 
 ### Como o futuro Urbico Admin poderia responder às perguntas do brief
 
@@ -107,6 +118,24 @@ passos".
 3. Se a intenção representa algo que o Urbico ainda não faz de verdade,
    adicione-a a `NORBY_UNSUPPORTED_INTENTS` para que ela entre como
    `status: "unsupported"` em vez de `"unknown"`.
+
+## Urbico Navigation — etapas de uma viagem
+
+`lib/trip-navigation.ts` acompanha uma viagem ativa por GPS real e emite os
+eventos de navegação da tabela acima nas transições reais de etapa:
+
+```
+walking_to_stop → waiting_at_stop → on_bus → walking_to_destination → arrived
+   bus_stop_reached   bus_boarding_   bus_alighting_   destination_reached
+                        detected        detected
+```
+
+Embarque/desembarque combinam uma heurística sobre dados reais (velocidade
+do GPS + proximidade ao veículo real da SPTrans) com confirmação manual da
+pessoa (`method: "manual"` vs `"heuristic"` em `properties`) — nunca há
+posição, ETA ou instrução inventada; quando o dado real não existe (sem
+veículo posicionado, sem SPTrans configurado), o estado correspondente
+fica indisponível em vez de simulado.
 
 ## Usuários e sessões
 
@@ -164,8 +193,12 @@ real.
   acima de `admin` — ainda sem nenhuma verificação de acesso usando esse
   valor.
 - Eventos catalogados mas ainda não emitidos: `crowd_report_viewed`,
-  `bus_details_viewed`, `route_details_viewed`.
+  `bus_details_viewed`, `route_details_viewed`, `navigation_step_completed`
+  em granularidade fina (hoje coberto pelas transições de etapa reais).
 - Detecção de "demandas incomuns" (agrupar solicitações `unknown`
   semanticamente parecidas) — hoje os dados ficam estruturados e prontos
   para isso, mas nenhum processamento de agrupamento existe ainda (ver
   decisão de produto: não implementar clustering agora).
+- Distância-à-rota (detecção de desvio) usa o vértice mais próximo do
+  trajeto em vez de projeção exata em segmento — aproximação razoável,
+  registrada como melhoria futura.
