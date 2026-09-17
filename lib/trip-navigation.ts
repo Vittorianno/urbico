@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { analytics } from "@/lib/analytics";
 import { closestTo, distanceMeters } from "@/lib/leave-alert";
 import { speakNorby } from "@/lib/norby-voice";
+import { scheduleTravelNotice } from "@/lib/notifications";
 import { watchUrbicoLocation, type LocationWatchHandle } from "@/lib/location-service";
 import { trpc } from "@/lib/trpc";
 import { useUrbico } from "@/lib/urbico-context";
@@ -30,6 +31,14 @@ export type NavigationPhase = "walking_to_stop" | "waiting_at_stop" | "on_bus" |
 
 const ARRIVAL_RADIUS_METERS = 30;
 const APPROACHING_RADIUS_METERS = 150;
+// FIX: "avise quando o ônibus estiver chegando" era uma intenção que o Norby
+// já reconhecia (ver NORBY_SUBINTENT_PATTERNS em lib/urbico-logic.ts) mas
+// respondia "ainda não tenho isso" (ver NORBY_UNSUPPORTED_INTENTS). O dado
+// real pra isso já existia — posição real do veículo rastreado
+// (trackedVehicle, via SPTrans) — só faltava usar. Raio maior que
+// ARRIVAL_RADIUS_METERS porque aqui o ônibus é que está se aproximando do
+// ponto, não a pessoa a pé (o sinal fica útil um pouco mais cedo).
+const BUS_APPROACHING_METERS = 300;
 const OFF_ROUTE_THRESHOLD_METERS = 70;
 const OFF_ROUTE_CONFIRM_READINGS = 2;
 // ~12,6 km/h — acima de caminhada normal (até ~6 km/h), sinal real de que a
@@ -38,7 +47,7 @@ const BUS_SPEED_THRESHOLD_MS = 3.5;
 const NEAR_VEHICLE_METERS = 40;
 
 export function useTripNavigation() {
-  const { activeRoute, currentLocation, setCurrentLocation, addNorbyMessage, voiceEnabled } = useUrbico();
+  const { activeRoute, currentLocation, setCurrentLocation, addNorbyMessage, voiceEnabled, notificationsEnabled } = useUrbico();
   const line = activeRoute?.line ?? null;
 
   const [phase, setPhase] = useState<NavigationPhase>("walking_to_stop");
@@ -77,12 +86,17 @@ export function useTripNavigation() {
     return predictionsQuery.data?.lines.find((entry) => entry.line.id === line.id) ?? null;
   }, [predictionsQuery.data, line]);
 
-  const announce = (key: string, text: string) => {
+  const announce = (key: string, text: string, options: { notify?: boolean } = {}) => {
     if (announcedRef.current.has(key)) return;
     announcedRef.current.add(key);
     addNorbyMessage(text);
     analytics.track("norby_navigation_instruction", { key, lineId: line?.id });
     if (voiceEnabled) void speakNorby(text);
+    // FIX: enquanto a pessoa espera no ponto, a tela pode estar bloqueada ou
+    // o app em segundo plano — mensagem no chat sozinha não chega até ela
+    // nesse caso. Mesmo canal já usado pelo alerta de saída (scheduleTravelNotice),
+    // respeitando a preferência de notificações de viagem.
+    if (options.notify && notificationsEnabled) void scheduleTravelNotice("Norby", text);
   };
 
   const setPhaseTracked = (next: NavigationPhase) => {
@@ -175,6 +189,23 @@ export function useTripNavigation() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeRoute?.destination.latitude, activeRoute?.destination.longitude, boardingStop?.id, alightingStop?.id, trackedVehicle?.id]);
+
+  // FIX: "avise quando o ônibus estiver chegando" — enquanto espera no
+  // ponto (waiting_at_stop), acompanha a distância real do veículo
+  // rastreado (trackedVehicle, posição SPTrans) até o ponto de embarque.
+  // Dispara uma vez por viagem quando o ônibus entra no raio de
+  // aproximação, com notificação local (chega mesmo com tela bloqueada).
+  // Efeito separado do watch de GPS acima porque depende só da posição do
+  // veículo (atualizada pelo polling de vehiclesQuery, não pelo GPS do
+  // usuário), e não deve reiniciar o watch de localização ao disparar.
+  useEffect(() => {
+    if (phase !== "waiting_at_stop" || !boardingStop || !trackedVehicle) return;
+    const distance = distanceMeters(trackedVehicle, boardingStop);
+    if (distance > BUS_APPROACHING_METERS) return;
+    announce("bus_approaching", `O ônibus${line ? ` da linha ${line.label}` : ""} está chegando ao seu ponto.`, { notify: true });
+    analytics.track("bus_approaching_detected", { lineId: line?.id, distanceMeters: Math.round(distance) });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, boardingStop?.id, trackedVehicle?.latitude, trackedVehicle?.longitude]);
 
   // Recálculo: só depois de leituras consecutivas fora da rota (evita reagir
   // a ruído comum de GPS) e só até o próximo ponto relevante (o ponto de
