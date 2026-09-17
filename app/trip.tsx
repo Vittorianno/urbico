@@ -39,9 +39,22 @@ export default function TripScreen() {
   const displayedLevel = lineId ? (crowdSummaryQuery.data?.level ?? null) : latestCrowd;
   const aggregatedCount = crowdSummaryQuery.data?.totalReports ?? 0;
 
+  // FIX: GPS indisponível/permissão negada continua avisado por Alert (é um
+  // erro pontual, faz sentido interromper) — mas SPTrans fora do ar ou sem
+  // veículo localizado agora ganham um AVISO FIXO no painel (não some
+  // sozinho, não bloqueia a tela) em vez de só deixar boardingStop/
+  // trackedVehicle como null silenciosamente (item 20 do briefing).
   useEffect(() => {
     if (nav.watchError) Alert.alert("Localização indisponível", nav.watchError);
   }, [nav.watchError]);
+
+  const statusBanner = !nav.stopsAvailable && activeRoute.line
+    ? { icon: "cloud-off" as const, text: "Não foi possível carregar as paradas desta linha agora. Verifique sua conexão ou tente novamente em instantes." }
+    : nav.sptransUnavailable
+      ? { icon: "cloud-off" as const, text: "Os dados da SPTrans/Olho Vivo estão indisponíveis no momento. As instruções de caminhada continuam funcionando; o acompanhamento do ônibus, não." }
+      : nav.noVehicleTracked
+        ? { icon: "directions-bus-filled" as const, text: "Nenhum veículo desta linha está reportando posição em tempo real agora — sem dado real de ônibus para acompanhar." }
+        : null;
 
   const mapVehicles = useMemo(() => (nav.trackedVehicle ? [{ id: nav.trackedVehicle.prefix, label: activeRoute?.line ? `Linha ${activeRoute.line.label}` : `Veículo ${nav.trackedVehicle.prefix}`, latitude: nav.trackedVehicle.latitude, longitude: nav.trackedVehicle.longitude }] : []), [nav.trackedVehicle, activeRoute?.line]);
   const mapStops = useMemo(() => {
@@ -128,6 +141,13 @@ export default function TripScreen() {
         </View>
 
         <View style={styles.panel}>
+          {statusBanner ? (
+            <View style={styles.statusBanner}>
+              <MaterialIcons name={statusBanner.icon} size={17} color={colors.warning} />
+              <Text style={styles.statusBannerText}>{statusBanner.text}</Text>
+            </View>
+          ) : null}
+
           <View style={styles.stageRow}>
             {STAGE_ICONS.map((icon, index) => (
               <View key={icon + index} style={styles.stageItem}>
@@ -181,6 +201,8 @@ const styles = StyleSheet.create({
   roundButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(15,26,41,0.85)", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border },
   recenterButton: { position: "absolute", right: 14, bottom: 14, width: 46, height: 46, borderRadius: 23, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
   panel: { padding: 16, paddingBottom: 20, backgroundColor: colors.background, borderTopWidth: 1, borderColor: colors.border },
+  statusBanner: { marginBottom: 12, padding: 10, borderRadius: 12, backgroundColor: "rgba(255,176,32,0.12)", borderWidth: 1, borderColor: "rgba(255,176,32,0.35)", flexDirection: "row", gap: 8, alignItems: "flex-start" },
+  statusBannerText: { flex: 1, color: colors.warning, fontSize: 11, lineHeight: 15 },
   stageRow: { flexDirection: "row", alignItems: "center" },
   stageItem: { flexDirection: "row", alignItems: "center", flex: 1 },
   stageDot: { width: 28, height: 28, borderRadius: 14, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
