@@ -130,12 +130,29 @@ export default function NorbyScreen() {
       awaitingCrowdRef.current = false;
     }
 
+    // FIX: "avise quando o ônibus estiver chegando" deixou de ser uma
+    // intenção sem funcionalidade real — lib/trip-navigation.ts agora
+    // acompanha a posição real do veículo (SPTrans) enquanto você espera no
+    // ponto, durante uma viagem ativa, e avisa (chat + voz + notificação,
+    // mesmo com a tela bloqueada) automaticamente quando ele se aproxima.
+    if (classification.subintent === "arrival_notification") {
+      const reply = activeRoute
+        ? "Já estou de olho nisso: assim que o ônibus real dessa linha se aproximar do seu ponto, eu aviso por aqui e por notificação, mesmo com a tela bloqueada."
+        : "Eu aviso automaticamente quando o ônibus estiver chegando — mas preciso de uma viagem ativa primeiro. Planeje uma rota e inicie a viagem que eu acompanho a partir daí.";
+      addNorbyMessage(reply);
+      if (voiceEnabled) void speakNorby(reply);
+      trackCommand("success");
+      return;
+    }
+
     // Intenção reconhecida, mas para a qual o Urbico ainda não tem
-    // funcionalidade de verdade (ex.: notificação de chegada) — status
-    // "unsupported", diferente de "unknown" (não entendi) ou "failure"
-    // (entendi e tentei, mas deu erro).
-    if (NORBY_UNSUPPORTED_INTENTS.includes(classification.intent) || classification.subintent === "arrival_notification") {
-      const reply = "Ainda não tenho um jeito de te avisar quando o ônibus estiver chegando, mas guardei esse pedido — é algo que pode virar uma funcionalidade futura.";
+    // funcionalidade de verdade — status "unsupported", diferente de
+    // "unknown" (não entendi) ou "failure" (entendi e tentei, mas deu
+    // erro). Hoje NORBY_UNSUPPORTED_INTENTS está vazia (ver
+    // lib/norby-intents.ts); este bloco fica pronto para a próxima
+    // intenção real reconhecida sem funcionalidade por trás.
+    if (NORBY_UNSUPPORTED_INTENTS.includes(classification.intent)) {
+      const reply = "Ainda não tenho essa funcionalidade, mas guardei esse pedido — pode virar algo futuro.";
       addNorbyMessage(reply);
       if (voiceEnabled) void speakNorby(reply);
       trackCommand("unsupported");
