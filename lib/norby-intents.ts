@@ -7,8 +7,10 @@
  *
  * "unknown": a mensagem não bateu com nenhum padrão reconhecido.
  * "unsupported": a intenção foi reconhecida, mas o Urbico ainda não tem essa
- * funcionalidade implementada (ex.: pedir para avisar quando o ônibus
- * estiver chegando — o Urbico não tem esse recurso hoje).
+ * funcionalidade implementada como um pedido avulso no chat. Hoje a lista
+ * está vazia — "avisar quando o ônibus estiver chegando" já é real durante
+ * uma viagem ativa (ver bus_approaching_detected em lib/trip-navigation.ts),
+ * então deixou de entrar aqui.
  *
  * Como adicionar uma intenção nova: acrescente aqui e em
  * NORBY_UNSUPPORTED_INTENTS (se ainda não for suportada) ou implemente a
@@ -38,8 +40,7 @@ export type NorbyIntent = (typeof NORBY_INTENTS)[number];
 
 /**
  * Intenções que o Norby já sabe RECONHECER (por palavra-chave), mas para as
- * quais o Urbico ainda não tem uma funcionalidade real por trás — ex.:
- * "me avise quando o ônibus estiver chegando" (notificação de chegada).
+ * quais o Urbico ainda não tem uma funcionalidade real por trás.
  * Registrado com status "unsupported" em vez de "unknown", para diferenciar
  * "não entendi o que você quis dizer" de "entendi, mas ainda não faço
  * isso" (ver docs/analytics.md, seção Norby).
