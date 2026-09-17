@@ -74,11 +74,14 @@ const NORBY_INTENT_PATTERNS: { intent: NorbyIntent; terms: string[] }[] = [
 const NORBY_SUBINTENT_PATTERNS: { subintent: string; terms: string[] }[] = [
   { subintent: "fastest_route", terms: ["mais rápido", "mais rapido", "mais rápida", "mais rapida", "chegar mais rápido", "chegar mais rapido"] },
   { subintent: "alternative_route", terms: ["outra opção", "outra opcao", "alternativa", "outro caminho"] },
-  // FIX: intenção real que aparece nas conversas mas que o Urbico ainda não
-  // implementa (não existe notificação de "ônibus chegando"). Reconhecida
-  // de propósito (não cai em "unknown"), pra virar sinal de nova demanda —
-  // ver NORBY_UNSUPPORTED_INTENTS em lib/norby-intents.ts e
-  // app/(tabs)/norby.tsx (onde isso vira status "unsupported").
+  // FIX: era uma intenção reconhecida sem funcionalidade real por trás
+  // (ver NORBY_UNSUPPORTED_INTENTS em lib/norby-intents.ts). Agora
+  // lib/trip-navigation.ts acompanha de verdade a posição real do veículo
+  // (SPTrans) durante uma viagem ativa e avisa quando ele se aproxima do
+  // ponto — ver `bus_approaching_detected` em docs/analytics.md. O
+  // subintent continua existindo (é usado para dar uma resposta específica
+  // em app/(tabs)/norby.tsx e para diferenciar essa demanda nos dados),
+  // só deixou de significar "sem funcionalidade".
   { subintent: "arrival_notification", terms: ["me avise quando o ônibus", "me avise quando o onibus", "avisa quando o ônibus estiver chegando", "avisa quando o onibus estiver chegando", "quando o ônibus estiver chegando", "quando o onibus estiver chegando"] },
 ];
 
