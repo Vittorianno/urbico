@@ -24,8 +24,19 @@ export default function AdminScreen() {
   const notifyOwnerMutation = trpc.system.notifyOwner.useMutation();
 
   if (!isAuthenticated || user?.role !== "admin") {
+    // FIX (auditoria — "tela sem seta de voltar"): esta tela de acesso
+    // negado não tinha nenhum controle de navegação. Quem chegasse aqui
+    // (deep link, usuário não-admin, etc) ficava preso, sem seta de voltar
+    // e sem qualquer forma de sair — precisava fechar o app. Agora tem o
+    // mesmo cabeçalho com botão de voltar usado nas outras telas internas.
     return (
       <ScreenContainer>
+        <View style={styles.deniedHeader}>
+          <Pressable onPress={() => router.back()} style={({ pressed }) => [styles.back, pressed && styles.pressed]}>
+            <MaterialIcons name="arrow-back" size={22} color={colors.text} />
+          </Pressable>
+          <View style={styles.back} />
+        </View>
         <View style={styles.deniedScreen}>
           <MaterialIcons name="lock" size={34} color={colors.muted} />
           <Text style={styles.deniedTitle}>Acesso restrito</Text>
@@ -109,6 +120,7 @@ function StatCard({ icon, label, value, hint }: { icon: React.ComponentProps<typ
 const styles = StyleSheet.create({
   content: { padding: 20, paddingTop: 10, paddingBottom: 30 },
   header: { height: 50, flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  deniedHeader: { height: 50, paddingHorizontal: 20, flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   back: { width: 42, height: 42, alignItems: "center", justifyContent: "center" },
   title: { color: colors.text, fontSize: 18, fontWeight: "700" },
   deniedScreen: { flex: 1, alignItems: "center", justifyContent: "center", padding: 30, gap: 8 },
