@@ -241,15 +241,28 @@ export default function NorbyScreen() {
   // (clearMessages, ver lib/urbico-context.tsx) e volta para a tela inicial
   // do Norby — não desloga, não apaga conta, favoritos, agenda ou qualquer
   // outro dado.
+  //
+  // FIX (auditoria — "o botão está lá mas não executa"): a lógica em si
+  // (Alert -> clearMessages -> setShowConversation) não depende de
+  // permissão, rede ou módulo nativo, e não encontrei defeito de código
+  // aqui. Enquanto isso é confirmado em aparelho real, adiciono logs em
+  // cada etapa (toque no botão do cabeçalho, toque em "Limpar",
+  // finalização do clearMessages) para saber exatamente onde a ação para
+  // caso o problema persista — e sem log nenhum aparecendo, o toque nem
+  // está chegando ao onPress (aponta para bundle desatualizado no
+  // dispositivo em vez de bug de lógica).
   const confirmClearChat = () => {
+    console.log("[urbico] confirmClearChat: botão do cabeçalho tocado");
     Alert.alert("Limpar conversa?", "As mensagens desta conversa serão removidas. Isso não afeta sua conta, favoritos ou agenda.", [
-      { text: "Cancelar", style: "cancel" },
+      { text: "Cancelar", style: "cancel", onPress: () => console.log("[urbico] confirmClearChat: cancelado") },
       {
         text: "Limpar",
         style: "destructive",
         onPress: () => {
+          console.log("[urbico] confirmClearChat: 'Limpar' confirmado, chamando clearMessages()");
           clearMessages();
           setShowConversation(false);
+          console.log("[urbico] confirmClearChat: clearMessages() concluído");
         },
       },
     ]);
@@ -280,8 +293,8 @@ export default function NorbyScreen() {
         <View style={styles.chatHeader}>
           <Pressable accessibilityLabel="Voltar" onPress={() => setShowConversation(false)} style={({ pressed }) => [styles.headerButton, pressed && styles.pressed]}><NorbyIcon name="arrow-back" size={29} color={colors.text} /></Pressable>
           <View style={styles.headerCenter}><Text style={styles.chatTitle}>Norby</Text><Text style={styles.chatSubtitle}>Seu assistente de mobilidade</Text></View>
-          <Pressable accessibilityLabel="Limpar conversa" onPress={confirmClearChat} style={({ pressed }) => [styles.headerButton, pressed && styles.pressed]}><MaterialIcons name="delete-outline" size={22} color={colors.muted} /></Pressable>
-          <Pressable accessibilityLabel="Mais opções" onPress={showMore} style={({ pressed }) => [styles.headerButton, pressed && styles.pressed]}><NorbyIcon name="more-vert" size={28} color={colors.text} /></Pressable>
+          <Pressable accessibilityLabel="Limpar conversa" hitSlop={8} onPress={confirmClearChat} style={({ pressed }) => [styles.headerButton, pressed && styles.pressed]}><MaterialIcons name="delete-outline" size={22} color={colors.muted} /></Pressable>
+          <Pressable accessibilityLabel="Mais opções" hitSlop={8} onPress={showMore} style={({ pressed }) => [styles.headerButton, pressed && styles.pressed]}><NorbyIcon name="more-vert" size={28} color={colors.text} /></Pressable>
         </View>
 
         <FlatList
