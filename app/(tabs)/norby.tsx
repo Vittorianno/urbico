@@ -382,7 +382,7 @@ const styles = StyleSheet.create({
   primaryText: { color: "#FFFFFF", fontSize: 11, fontWeight: "800" },
   composer: { minHeight: 72, paddingHorizontal: 12, paddingVertical: 10, flexDirection: "row", alignItems: "center", gap: 7, borderTopWidth: 1, borderColor: colors.border, backgroundColor: colors.background, zIndex: 10, elevation: 10 },
   addButton: { width: 43, height: 43, borderRadius: 22, borderWidth: 2, borderColor: colors.blue, alignItems: "center", justifyContent: "center" },
-  composerInput: { flex: 1, minHeight: 46, borderRadius: 23, backgroundColor: colors.card, color: colors.text, paddingHorizontal: 16, fontSize: 15, borderWidth: 1, borderColor: colors.border },
+  composerInput: { flex: 1, minWidth: 0, flexShrink: 1, minHeight: 46, borderRadius: 23, backgroundColor: colors.card, color: colors.text, paddingHorizontal: 16, fontSize: 15, borderWidth: 1, borderColor: colors.border },
   composerMic: { width: 43, height: 43, borderRadius: 22, backgroundColor: colors.blueSoft, alignItems: "center", justifyContent: "center" },
   composerMicActive: { backgroundColor: colors.blue },
   send: { width: 43, height: 43, borderRadius: 22, backgroundColor: colors.blue, alignItems: "center", justifyContent: "center" },
