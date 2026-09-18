@@ -4,6 +4,7 @@ import { Alert, Pressable, StyleSheet, Switch, Text, View } from "react-native";
 
 import { ScreenContainer } from "@/components/screen-container";
 import { colors } from "@/components/urbico-ui";
+import { confirmAsync } from "@/lib/confirm";
 import { useUrbico } from "@/lib/urbico-context";
 import { getInstallationId, stopDepartureLocationUpdates } from "@/lib/departure-location-task";
 import { enableTravelNotifications } from "@/lib/notifications";
@@ -21,39 +22,26 @@ export default function SettingsScreen() {
     setNotificationsEnabled(granted);
     if (!granted) Alert.alert("Permissão necessária", "Autorize notificações nas configurações do dispositivo para receber alertas da viagem.");
   };
-  // FIX (auditoria — "só um botão funciona" em Perfil/Privacidade): a
-  // revogação rodava stopDepartureLocationUpdates() + getInstallationId() +
-  // a chamada ao servidor sem nenhum try/catch ao redor. Se qualquer uma
-  // dessas etapas falhasse (SecureStore indisponível, tarefa de localização
-  // em estado inesperado, etc), a Promise rejeitava sem tratamento e
-  // setLocationSharingEnabled(false) nunca era chamado — o switch, sendo
-  // controlado por esse estado, ficava visualmente parado na posição
-  // antiga. Agora o desligamento local (setLocationSharingEnabled(false))
-  // sempre acontece, mesmo se a limpeza de fundo ou a chamada ao servidor
-  // falharem; só a chamada ao servidor tinha proteção antes.
+  // FIX (auditoria — mesma causa raiz do botão "limpar conversa" do Norby):
+  // este Alert.alert com Cancelar/Revogar também não mostra diálogo nenhum
+  // na Web, então "Revogar" nunca era de fato tocado — a confirmação nunca
+  // acontecia. Trocado por confirmAsync (funciona na Web e no nativo). A
+  // proteção com try/catch em cada etapa (já corrigida antes) continua.
   const changeLocationSharing = async (enabled: boolean) => {
     if (enabled) { Alert.alert("Ative pela agenda", "Crie um compromisso com endereço e linha para escolher o alerta de saída e autorizar a localização apenas para ele."); return; }
-    Alert.alert("Revogar monitoramento?", "Isso encerra as atualizações de localização e remove a posição guardada para o alerta.", [
-      { text: "Cancelar", style: "cancel" },
-      {
-        text: "Revogar",
-        style: "destructive",
-        onPress: () =>
-          void (async () => {
-            try {
-              await stopDepartureLocationUpdates();
-            } catch (error) {
-              console.warn("[urbico] stopDepartureLocationUpdates falhou:", error);
-            }
-            try {
-              await revokeAlert.mutateAsync({ installationId: await getInstallationId() });
-            } catch (error) {
-              console.warn("[urbico] revokeAlert falhou:", error);
-            }
-            setLocationSharingEnabled(false);
-          })(),
-      },
-    ]);
+    const confirmed = await confirmAsync("Revogar monitoramento?", "Isso encerra as atualizações de localização e remove a posição guardada para o alerta.", "Revogar", true);
+    if (!confirmed) return;
+    try {
+      await stopDepartureLocationUpdates();
+    } catch (error) {
+      console.warn("[urbico] stopDepartureLocationUpdates falhou:", error);
+    }
+    try {
+      await revokeAlert.mutateAsync({ installationId: await getInstallationId() });
+    } catch (error) {
+      console.warn("[urbico] revokeAlert falhou:", error);
+    }
+    setLocationSharingEnabled(false);
   };
   return <ScreenContainer><View style={styles.screen}><View style={styles.header}><Pressable onPress={() => router.back()} style={({ pressed }) => [styles.back, pressed && styles.pressed]}><MaterialIcons name="arrow-back" size={22} color={colors.text} /></Pressable><Text style={styles.title}>Configurações</Text><View style={styles.back} /></View><Text style={styles.section}>EXPERIÊNCIA</Text><View style={styles.list}><Toggle icon="notifications" title="Notificações de viagem" enabled={notificationsEnabled} setEnabled={changeNotificationPreference} /><Toggle icon="mic" title="Entrada por voz" enabled={voiceEnabled} setEnabled={setVoiceEnabled} /></View><Text style={styles.section}>PRIVACIDADE</Text><View style={styles.list}><Toggle icon="location-on" title="Monitoramento para alertas" enabled={locationSharingEnabled} setEnabled={changeLocationSharing} /><Pressable onPress={() => Alert.alert("Dados de alerta", "A localização é enviada apenas enquanto um alerta autorizado estiver ativo. Você pode revogar o monitoramento nesta tela, o que remove a última posição guardada para o alerta.")} style={({ pressed }) => [styles.row, pressed && styles.pressed]}><View style={styles.icon}><MaterialIcons name="privacy-tip" size={21} color={colors.text} /></View><View style={{ flex: 1 }}><Text style={styles.rowTitle}>Dados e privacidade</Text><Text style={styles.rowSub}>Entenda o uso da localização para alertas.</Text></View><MaterialIcons name="chevron-right" size={21} color={colors.muted} /></Pressable></View></View></ScreenContainer>;
 }
