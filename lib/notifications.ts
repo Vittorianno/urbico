@@ -31,21 +31,37 @@ async function enableWebNotifications() {
   return permission === "granted";
 }
 
-export async function enableTravelNotifications() {
-  if (Platform.OS === "web") return enableWebNotifications();
+// FIX (auditoria — botão "não se move"): esta função podia REJEITAR (throw)
+// em vez de resolver, se setNotificationChannelAsync ou
+// getPermissionsAsync/requestPermissionsAsync falhassem no Android (módulo
+// nativo indisponível, erro pontual do sistema, etc). Quem chama esta
+// função (app/settings.tsx e app/(tabs)/profile.tsx) faz
+// `setNotificationsEnabled(await enableTravelNotifications())` — uma
+// rejeição não tratada pulava essa linha inteira, então o estado nunca era
+// atualizado e o Switch (controlado por esse estado) ficava visualmente
+// parado na posição antiga, não importa quantas vezes a pessoa tocasse.
+// Agora qualquer falha aqui dentro é capturada e a função sempre RESOLVE
+// com true ou false — nunca rejeita.
+export async function enableTravelNotifications(): Promise<boolean> {
+  try {
+    if (Platform.OS === "web") return await enableWebNotifications();
 
-  if (Platform.OS === "android") {
-    await Notifications.setNotificationChannelAsync(TRAVEL_CHANNEL_ID, {
-      name: "Atualizações de viagem",
-      importance: Notifications.AndroidImportance.HIGH,
-      vibrationPattern: [0, 180],
-      lightColor: "#087DF5",
-    });
+    if (Platform.OS === "android") {
+      await Notifications.setNotificationChannelAsync(TRAVEL_CHANNEL_ID, {
+        name: "Atualizações de viagem",
+        importance: Notifications.AndroidImportance.HIGH,
+        vibrationPattern: [0, 180],
+        lightColor: "#087DF5",
+      });
+    }
+
+    const current = await Notifications.getPermissionsAsync();
+    const result = current.status === "granted" ? current : await Notifications.requestPermissionsAsync();
+    return result.status === "granted";
+  } catch (error) {
+    console.warn("[urbico] enableTravelNotifications falhou:", error);
+    return false;
   }
-
-  const current = await Notifications.getPermissionsAsync();
-  const result = current.status === "granted" ? current : await Notifications.requestPermissionsAsync();
-  return result.status === "granted";
 }
 
 export async function scheduleTravelNotice(title: string, body: string) {
