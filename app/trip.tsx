@@ -7,6 +7,7 @@ import { CrowdLevelBadge } from "@/components/crowd-level";
 import { ScreenContainer } from "@/components/screen-container";
 import { UrbicoMap } from "@/components/urbico-map";
 import { colors, PrimaryButton, SecondaryButton } from "@/components/urbico-ui";
+import { confirmAsync } from "@/lib/confirm";
 import { useTripNavigation, type NavigationPhase } from "@/lib/trip-navigation";
 import { getCurrentUrbicoLocation } from "@/lib/location-service";
 import { trpc } from "@/lib/trpc";
@@ -78,15 +79,29 @@ export default function TripScreen() {
     }
   };
 
+  // FIX (auditoria): Share.share não tem suporte confiável na Web (pode não
+  // existir ou rejeitar dependendo do navegador/HTTPS) — sem o try/catch,
+  // o botão "Compartilhar viagem" podia falhar silenciosamente ali (erro só
+  // no console, sem feedback nenhum pra pessoa).
   const shareTrip = async () => {
-    await Share.share({ message: "Estou acompanhando uma viagem pelo Urbico. Acompanhe meu status pelo aplicativo." });
+    try {
+      await Share.share({ message: "Estou acompanhando uma viagem pelo Urbico. Acompanhe meu status pelo aplicativo." });
+    } catch (error) {
+      console.warn("[urbico] shareTrip falhou:", error);
+      Alert.alert("Não foi possível compartilhar", "Tente novamente em instantes.");
+    }
   };
 
-  const confirmFinish = () => {
-    Alert.alert("Encerrar viagem?", "O acompanhamento por GPS será interrompido.", [
-      { text: "Cancelar", style: "cancel" },
-      { text: "Encerrar", style: "destructive", onPress: () => { nav.cancel(); endTrip(); router.replace("/"); } },
-    ]);
+  // FIX (auditoria — mesma causa raiz do botão "limpar conversa" do
+  // Norby): Alert.alert com Cancelar/Encerrar não mostra diálogo na Web,
+  // então "Encerrar" nunca era de fato confirmado ali. Trocado por
+  // confirmAsync.
+  const confirmFinish = async () => {
+    const confirmed = await confirmAsync("Encerrar viagem?", "O acompanhamento por GPS será interrompido.", "Encerrar", true);
+    if (!confirmed) return;
+    nav.cancel();
+    endTrip();
+    router.replace("/");
   };
 
   // FIX: sem rota ativa, a tela antes ficava mostrando placeholders vagos
@@ -185,7 +200,7 @@ export default function TripScreen() {
 
           <View style={styles.actions}>
             <SecondaryButton label="Segurança" icon="shield" onPress={() => router.push("/security")} style={{ flex: 1 }} />
-            <PrimaryButton label="ENCERRAR" icon="stop-circle" onPress={confirmFinish} style={styles.finishButton} />
+            <PrimaryButton label="ENCERRAR" icon="stop-circle" onPress={() => void confirmFinish()} style={styles.finishButton} />
           </View>
         </View>
       </View>
