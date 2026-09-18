@@ -1,11 +1,11 @@
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { router } from "expo-router";
 import { useState } from "react";
-import { Alert, Linking, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from "react-native";
-import * as RNShare from "react-native";
+import { Alert, Linking, Pressable, ScrollView, Share, StyleSheet, Switch, Text, TextInput, View } from "react-native";
 
 import { ScreenContainer } from "@/components/screen-container";
 import { colors, InfoCard, PrimaryButton } from "@/components/urbico-ui";
+import { confirmAsync } from "@/lib/confirm";
 import { useUrbico } from "@/lib/urbico-context";
 
 export default function SecurityScreen() {
@@ -17,11 +17,20 @@ export default function SecurityScreen() {
   // viagem fosse identificada" — nunca chamava o compartilhamento de
   // verdade. Agora chama o share sheet nativo já, com os dados reais da rota
   // ativa quando existir uma (mesma lógica de app/trip.tsx).
+  // FIX (auditoria): `import * as RNShare from "react-native"` era um
+  // import duplicado e desnecessário do módulo inteiro só para pegar
+  // `Share` — o pacote já é importado normalmente acima. Também protegido
+  // com try/catch: Share.share não tem suporte garantido na Web.
   const share = async () => {
     const message = activeRoute?.line
       ? `Estou indo para ${activeRoute.destination.name} pela linha ${activeRoute.line.label} (Urbico). Acompanhe meu status pelo aplicativo.`
       : "Estou acompanhando uma viagem pelo Urbico. Acompanhe meu status pelo aplicativo.";
-    await RNShare.Share.share({ message });
+    try {
+      await Share.share({ message });
+    } catch (error) {
+      console.warn("[urbico] share (segurança) falhou:", error);
+      Alert.alert("Não foi possível compartilhar", "Tente novamente em instantes.");
+    }
   };
 
   const addContact = () => {
@@ -40,17 +49,29 @@ export default function SecurityScreen() {
     void Linking.openURL(`tel:${phone.replace(/[^\d+]/g, "")}`);
   };
 
+  // FIX (auditoria): excluir um contato de confiança apagava na hora, sem
+  // nenhuma confirmação — um toque sem querer no ícone de lixeira perdia o
+  // contato de segurança sem chance de desfazer. Agora confirma antes,
+  // com confirmAsync (funciona igual na Web e no nativo).
+  const deleteContact = async (contact: { id: string; name: string }) => {
+    const confirmed = await confirmAsync("Excluir contato?", `Remover ${contact.name} dos seus contatos de confiança?`, "Excluir", true);
+    if (confirmed) removeTrustedContact(contact.id);
+  };
+
   // FIX: antes o botão de emergência só mostrava um Alert genérico, mesmo
   // com contatos de confiança cadastrados. Agora, se houver ao menos um
   // contato, oferece ligar direto para ele; sem contato cadastrado, mantém
   // a orientação anterior (o Urbico não substitui serviços oficiais).
-  const emergency = () => {
+  // FIX (auditoria — mesma causa raiz do botão "limpar conversa" do
+  // Norby): quando há contato, este era um Alert.alert de dois botões
+  // (Cancelar / Ligar), que não mostra diálogo nenhum na Web. Trocado por
+  // confirmAsync. O caso sem contato continua como Alert.alert de um botão
+  // só (informativo), que não tem esse problema.
+  const emergency = async () => {
     if (trustedContacts.length > 0) {
       const first = trustedContacts[0];
-      Alert.alert("Emergência", `Ligar agora para ${first.name}? Em uma situação urgente, procure também os canais oficiais de emergência.`, [
-        { text: "Cancelar", style: "cancel" },
-        { text: `Ligar para ${first.name}`, onPress: () => callContact(first.phone) },
-      ]);
+      const confirmed = await confirmAsync("Emergência", `Ligar agora para ${first.name}? Em uma situação urgente, procure também os canais oficiais de emergência.`, `Ligar para ${first.name}`, false);
+      if (confirmed) callContact(first.phone);
       return;
     }
     Alert.alert("Emergência", "Você ainda não tem um contato de confiança cadastrado. O Urbico não substitui os serviços oficiais de emergência — em uma situação urgente, procure os canais oficiais e pessoas de confiança.");
@@ -88,7 +109,7 @@ export default function SecurityScreen() {
                   <Text style={styles.itemSubtitle}>{contact.phone}</Text>
                 </View>
                 <Pressable onPress={() => callContact(contact.phone)} style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}><MaterialIcons name="call" size={19} color={colors.cyan} /></Pressable>
-                <Pressable onPress={() => removeTrustedContact(contact.id)} style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}><MaterialIcons name="delete-outline" size={19} color={colors.muted} /></Pressable>
+                <Pressable onPress={() => void deleteContact(contact)} style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}><MaterialIcons name="delete-outline" size={19} color={colors.muted} /></Pressable>
               </View>
             ))}
           </View>
@@ -107,7 +128,7 @@ export default function SecurityScreen() {
           </View>
         </View>
 
-        <Pressable onPress={emergency} style={({ pressed }) => [styles.emergency, pressed && styles.pressed]}>
+        <Pressable onPress={() => void emergency()} style={({ pressed }) => [styles.emergency, pressed && styles.pressed]}>
           <MaterialIcons name="warning-amber" size={27} color="#FFFFFF" />
           <View><Text style={styles.emergencyTitle}>EMERGÊNCIA</Text><Text style={styles.emergencyText}>Precisa de ajuda? Toque para orientação.</Text></View>
         </Pressable>
