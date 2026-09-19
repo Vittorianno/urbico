@@ -1,4 +1,4 @@
-const { withProjectBuildGradle } = require("@expo/config-plugins");
+const { withProjectBuildGradle } = require("expo/config-plugins");
 
 /**
  * FIX (auditoria — "Inconsistent JVM Target Compatibility"): vários módulos
@@ -8,16 +8,18 @@ const { withProjectBuildGradle } = require("@expo/config-plugins");
  * arquivo dentro de node_modules não é sustentável (não sobrevive a um
  * novo `pnpm install`).
  *
- * FIX v2: a primeira versão usava `subprojects { afterEvaluate {...} }`,
- * mas isso não pegou pra react-native-worklets — a explicação mais
- * provável é ordem de registro: nosso `subprojects{}` é aplicado ANTES do
- * build.gradle do próprio módulo rodar, então o afterEvaluate interno dele
- * (que fixa jvmTarget="17") é registrado DEPOIS do nosso e roda por
- * último, vencendo. `gradle.projectsEvaluated` só dispara depois que TODO
- * projeto (raiz e subprojetos) já terminou sua própria fase de
- * configuração, incluindo os afterEvaluate internos deles — não tem como
- * algo rodar depois disso na fase de configuração.
+ * FIX v3: a v1 usava `subprojects { afterEvaluate {...} }` (não pegou,
+ * provável problema de ordem de registro). A v2 trocou pra
+ * `gradle.projectsEvaluated` mas continuou sem efeito nenhum — o snippet
+ * nem chegava a aparecer no android/build.gradle gerado. Causa real
+ * encontrada: o import usava `require("@expo/config-plugins")`. Com pnpm
+ * (node_modules não achatado), esse pacote só existe como dependência
+ * TRANSITIVA do pacote `expo` — não é resolvível a partir da raiz do
+ * projeto. O caminho correto, documentado pelo próprio Expo para plugins
+ * locais, é `expo/config-plugins` (subpath que o pacote `expo`, esse sim
+ * dependência direta, reexporta).
  */
+const { withProjectBuildGradle: _withProjectBuildGradle } = require("expo/config-plugins");
 const SNIPPET_MARKER = "withAndroidKotlinJvmTarget";
 
 const SNIPPET = `
@@ -38,9 +40,13 @@ gradle.projectsEvaluated {
 `;
 
 module.exports = function withAndroidKotlinJvmTarget(config) {
-  return withProjectBuildGradle(config, (config) => {
+  console.log("[urbico] withAndroidKotlinJvmTarget: plugin carregado, injetando snippet no android/build.gradle");
+  return _withProjectBuildGradle(config, (config) => {
     if (config.modResults.language === "groovy" && !config.modResults.contents.includes(SNIPPET_MARKER)) {
       config.modResults.contents += SNIPPET;
+      console.log("[urbico] withAndroidKotlinJvmTarget: snippet injetado com sucesso");
+    } else if (config.modResults.language !== "groovy") {
+      console.warn(`[urbico] withAndroidKotlinJvmTarget: android/build.gradle não é Groovy (é "${config.modResults.language}") — snippet NÃO injetado`);
     }
     return config;
   });
