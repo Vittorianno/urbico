@@ -23,6 +23,19 @@ const env = {
 const GOOGLE_TEST_ANDROID_APP_ID = "ca-app-pub-3940256099942544~3347511713";
 const GOOGLE_TEST_IOS_APP_ID = "ca-app-pub-3940256099942544~1458002511";
 
+// FIX (auditoria — branch feature/norby-local-llama): react-native-google-mobile-ads
+// 16.5.0 traz play-services-ads 25.4.0, compilado com metadados Kotlin 2.3.0
+// — mais novo do que o compilador Kotlin deste projeto (2.1.20) consegue
+// ler ("Module was compiled with an incompatible version of Kotlin").
+// Isso é um problema real e separado do trabalho do Llama local, não algo
+// que devo arriscar "consertar" às pressas sem testar isoladamente.
+// Desativado SÓ NESTA BRANCH para não bloquear a validação do llama.rn (que
+// já compila limpo). Resolver isso na main é tarefa separada — provavelmente
+// vai precisar de outra versão do react-native-google-mobile-ads ou de
+// bump do Kotlin do projeto via expo-build-properties, mas isso não deve
+// ser testado no mesmo build que ainda está validando o motor local.
+const ADMOB_TEMPORARILY_DISABLED = true;
+
 const config: ExpoConfig = {
   name: env.appName,
   slug: env.appSlug,
@@ -139,13 +152,18 @@ const config: ExpoConfig = {
     // entrarem de fato no AndroidManifest.xml/Info.plist; não tem efeito no
     // preview web nem no Expo Go, só em development build nativo. Ver
     // components/ad-banner.tsx para o componente de anúncio em si.
-    [
-      "react-native-google-mobile-ads",
-      {
-        androidAppId: process.env.EXPO_PUBLIC_ADMOB_ANDROID_APP_ID ?? GOOGLE_TEST_ANDROID_APP_ID,
-        iosAppId: process.env.EXPO_PUBLIC_ADMOB_IOS_APP_ID ?? GOOGLE_TEST_IOS_APP_ID,
-      },
-    ],
+    // Temporariamente comentado nesta branch (ver ADMOB_TEMPORARILY_DISABLED acima).
+    ...(ADMOB_TEMPORARILY_DISABLED
+      ? []
+      : [
+          [
+            "react-native-google-mobile-ads",
+            {
+              androidAppId: process.env.EXPO_PUBLIC_ADMOB_ANDROID_APP_ID ?? GOOGLE_TEST_ANDROID_APP_ID,
+              iosAppId: process.env.EXPO_PUBLIC_ADMOB_IOS_APP_ID ?? GOOGLE_TEST_IOS_APP_ID,
+            },
+          ] as const,
+        ]),
     [
       "expo-build-properties",
       {
@@ -155,6 +173,11 @@ const config: ExpoConfig = {
         },
       },
     ],
+    // FIX (auditoria — Inconsistent JVM Target Compatibility): ver
+    // plugins/withAndroidKotlinJvmTarget.js. Precisa vir depois dos outros
+    // plugins que mexem em android/build.gradle, para o bloco `subprojects`
+    // que ele injeta valer para todos os módulos já registrados.
+    "./plugins/withAndroidKotlinJvmTarget",
   ],
   experiments: {
     typedRoutes: true,
