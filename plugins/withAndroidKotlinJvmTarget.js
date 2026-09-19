@@ -4,28 +4,29 @@ const { withProjectBuildGradle } = require("@expo/config-plugins");
  * FIX (auditoria — "Inconsistent JVM Target Compatibility"): vários módulos
  * nativos de terceiros (ex.: react-native-worklets) têm suas tarefas
  * compileDebugJavaWithJavac e compileDebugKotlin mirando versões
- * diferentes da JVM (uma pegava 21 de alguma configuração global, a outra
- * ficava presa em 17 de um default do próprio módulo) — Gradle recusa
- * linkar isso. Corrigir arquivo por arquivo dentro de node_modules não é
- * sustentável (não sobrevive a um novo `pnpm install`). Este plugin
- * injeta, no android/build.gradle gerado pelo `expo prebuild`, um bloco
- * `subprojects` que força TODO módulo Android do projeto (o app e todas
- * as dependências nativas) a compilar Java e Kotlin para a mesma versão
- * (21) — sobrevive a qualquer prebuild novo, porque roda de novo toda vez.
+ * diferentes da JVM — Gradle recusa linkar isso. Corrigir arquivo por
+ * arquivo dentro de node_modules não é sustentável (não sobrevive a um
+ * novo `pnpm install`).
+ *
+ * FIX v2: a primeira versão usava `subprojects { afterEvaluate {...} }`,
+ * mas isso não pegou pra react-native-worklets — a explicação mais
+ * provável é ordem de registro: nosso `subprojects{}` é aplicado ANTES do
+ * build.gradle do próprio módulo rodar, então o afterEvaluate interno dele
+ * (que fixa jvmTarget="17") é registrado DEPOIS do nosso e roda por
+ * último, vencendo. `gradle.projectsEvaluated` só dispara depois que TODO
+ * projeto (raiz e subprojetos) já terminou sua própria fase de
+ * configuração, incluindo os afterEvaluate internos deles — não tem como
+ * algo rodar depois disso na fase de configuração.
  */
 const SNIPPET_MARKER = "withAndroidKotlinJvmTarget";
 
 const SNIPPET = `
 // Injetado por plugins/withAndroidKotlinJvmTarget.js (${SNIPPET_MARKER}) — não editar manualmente aqui, editar o plugin.
-subprojects { subproject ->
-  afterEvaluate {
+gradle.projectsEvaluated {
+  subprojects.each { subproject ->
     if (subproject.hasProperty("android")) {
-      subproject.android {
-        compileOptions {
-          sourceCompatibility JavaVersion.VERSION_21
-          targetCompatibility JavaVersion.VERSION_21
-        }
-      }
+      subproject.android.compileOptions.sourceCompatibility = JavaVersion.VERSION_21
+      subproject.android.compileOptions.targetCompatibility = JavaVersion.VERSION_21
     }
     subproject.tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
       kotlinOptions {
