@@ -5,6 +5,10 @@ import { ENV } from "./env";
 export type SupabaseUser = {
   id: string;
   email?: string | null;
+  // Preenchidos pelo Supabase quando o e-mail foi confirmado (link do e-mail
+  // ou login social). Nulos enquanto a conta está pendente de confirmação.
+  email_confirmed_at?: string | null;
+  confirmed_at?: string | null;
   user_metadata?: { full_name?: string | null; [key: string]: unknown };
 };
 
