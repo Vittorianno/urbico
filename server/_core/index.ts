@@ -10,6 +10,7 @@ import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { evaluateDepartureAlerts } from "../leave-alert-monitor";
 import { handleDepartureAlertMonitor } from "../scheduled/departure-alerts";
+import { createCorsMiddleware, createRateLimiter, logSecurityWarnings } from "./security";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise((resolve) => {
@@ -42,6 +43,8 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 // hospedagem (ex.: Vercel Cron, GitHub Actions).
 const DEPARTURE_ALERT_INTERVAL_MS = 60_000;
 
+let departureAlertTimer: ReturnType<typeof setInterval> | undefined;
+
 function startDepartureAlertScheduler() {
   const run = () => {
     evaluateDepartureAlerts().catch((error) => {
@@ -49,36 +52,46 @@ function startDepartureAlertScheduler() {
     });
   };
   run();
-  setInterval(run, DEPARTURE_ALERT_INTERVAL_MS);
+  departureAlertTimer = setInterval(run, DEPARTURE_ALERT_INTERVAL_MS);
+}
+
+// TRUST_PROXY: quantos proxies reversos existem na frente do servidor
+// ("1" na maioria das hospedagens; "true"/"loopback" também aceitos). Sem isto
+// atrás de um proxy, req.ip seria o IP do proxy e o rate limit trataria todos
+// os usuários como um só. Em produção o padrão é 1; em dev, desligado.
+function configureTrustProxy(app: express.Express) {
+  const raw = process.env.TRUST_PROXY?.trim();
+  if (!raw) {
+    if (process.env.NODE_ENV === "production") app.set("trust proxy", 1);
+    return;
+  }
+  if (raw === "true") app.set("trust proxy", true);
+  else if (raw === "false" || raw === "0") app.set("trust proxy", false);
+  else if (/^\d+$/.test(raw)) app.set("trust proxy", Number(raw));
+  else app.set("trust proxy", raw);
 }
 
 async function startServer() {
   const app = express();
   const server = createServer(app);
 
-  // Enable CORS for all routes - reflect the request origin to support credentials
-  app.use((req, res, next) => {
-    const origin = req.headers.origin;
-    if (origin) {
-      res.header("Access-Control-Allow-Origin", origin);
-    }
-    res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-    res.header(
-      "Access-Control-Allow-Headers",
-      "Origin, X-Requested-With, Content-Type, Accept, Authorization",
-    );
-    res.header("Access-Control-Allow-Credentials", "true");
+  app.disable("x-powered-by");
+  configureTrustProxy(app);
+  logSecurityWarnings();
 
-    // Handle preflight requests
-    if (req.method === "OPTIONS") {
-      res.sendStatus(200);
-      return;
-    }
-    next();
-  });
+  // CORS: allowlist em produção (CORS_ALLOWED_ORIGINS); em desenvolvimento
+  // reflete a origem, como antes. Ver server/_core/security.ts.
+  app.use(createCorsMiddleware());
 
-  app.use(express.json({ limit: "50mb" }));
-  app.use(express.urlencoded({ limit: "50mb", extended: true }));
+  // Limite de payload: os 50mb anteriores não eram necessários (nenhuma rota
+  // recebe upload por JSON) e facilitavam esgotar memória.
+  app.use(express.json({ limit: "1mb" }));
+  app.use(express.urlencoded({ limit: "1mb", extended: true }));
+
+  // Rate limit por IP. Valores generosos para uso normal (polling de
+  // veículos, chat) e restritivos para troca de token de login.
+  app.use("/api/auth/session", createRateLimiter({ windowMs: 60_000, max: 30 }));
+  app.use("/api/trpc", createRateLimiter({ windowMs: 60_000, max: 600 }));
 
   registerStorageProxy(app);
   registerOAuthRoutes(app);
@@ -111,6 +124,20 @@ async function startServer() {
     console.log(`[api] server listening on port ${port}`);
     startDepartureAlertScheduler();
   });
+
+  // Encerramento gracioso (hospedagens enviam SIGTERM ao reiniciar/deploy).
+  const shutdown = (signal: string) => {
+    console.log(`[api] ${signal} recebido, encerrando...`);
+    if (departureAlertTimer) clearInterval(departureAlertTimer);
+    server.close(() => process.exit(0));
+    const forceExit = setTimeout(() => process.exit(1), 10_000);
+    (forceExit as unknown as { unref?: () => void }).unref?.();
+  };
+  process.on("SIGTERM", () => shutdown("SIGTERM"));
+  process.on("SIGINT", () => shutdown("SIGINT"));
 }
 
-startServer().catch(console.error);
+startServer().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});
