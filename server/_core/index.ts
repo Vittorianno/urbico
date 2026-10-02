@@ -10,6 +10,7 @@ import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { evaluateDepartureAlerts } from "../leave-alert-monitor";
 import { handleDepartureAlertMonitor } from "../scheduled/departure-alerts";
+import { getNorbyStatus } from "../integrations/norby";
 import { createCorsMiddleware, createRateLimiter, logSecurityWarnings } from "./security";
 
 function isPortAvailable(port: number): Promise<boolean> {
@@ -99,6 +100,12 @@ async function startServer() {
 
   app.get("/api/health", (_req, res) => {
     res.json({ ok: true, timestamp: Date.now() });
+  });
+
+  // Estado REAL do Ollama (configurado? alcançável? modelo instalado?) —
+  // permite verificar o Llama sem depender de ler código. Não expõe a URL.
+  app.get("/api/norby/status", createRateLimiter({ windowMs: 60_000, max: 30 }), async (_req, res) => {
+    res.json(await getNorbyStatus());
   });
 
   // Mantido para hospedagens que preferem acionar o monitoramento via cron
