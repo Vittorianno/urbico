@@ -1,3 +1,5 @@
+import { fetchWithTimeout } from "../_core/http";
+
 export type Coordinates = { latitude: number; longitude: number };
 export type GeocodedPlace = Coordinates & { name: string; address: string };
 export type WalkingRoute = { distanceMeters: number; durationSeconds: number; points: number[][]; instructions: Array<{ text: string; distanceMeters: number; durationSeconds: number }> };
@@ -25,7 +27,7 @@ async function suggestAddressesViaPelias(query: string): Promise<GeocodedPlace[]
   url.searchParams.set("lang", "pt-BR");
   url.searchParams.set("boundary.country", "BR");
   url.searchParams.set("size", "5");
-  const response = await fetch(url);
+  const response = await fetchWithTimeout(url);
   if (!response.ok) throw new Error("A busca aberta de endereços não respondeu.");
   const payload = (await response.json()) as PeliasResponse;
   return (payload.features ?? []).map((feature) => mapPeliasFeature(feature, query)).filter((place): place is GeocodedPlace => Boolean(place));
@@ -49,7 +51,7 @@ async function suggestAddressesViaNominatim(query: string): Promise<GeocodedPlac
   url.searchParams.set("countrycodes", "br");
   url.searchParams.set("accept-language", "pt-BR");
   url.searchParams.set("limit", "5");
-  const response = await fetch(url, { headers: { "User-Agent": "UrbicoApp/1.0 (projeto pessoal de mobilidade urbana)" } });
+  const response = await fetchWithTimeout(url, { headers: { "User-Agent": "UrbicoApp/1.0 (projeto pessoal de mobilidade urbana)" } });
   if (!response.ok) throw new Error(`O Nominatim respondeu com status ${response.status}.`);
   const payload = (await response.json()) as NominatimResult[];
   return payload
@@ -109,7 +111,7 @@ async function planWalkingRouteViaValhalla(origin: Coordinates, destination: Coo
   if (!baseUrl) return null;
   const url = new URL(`${baseUrl}/route`);
   url.searchParams.set("json", JSON.stringify({ locations: [{ lat: origin.latitude, lon: origin.longitude }, { lat: destination.latitude, lon: destination.longitude }], costing: "pedestrian", units: "kilometers", language: "pt-BR", shape_format: "polyline6" }));
-  const response = await fetch(url);
+  const response = await fetchWithTimeout(url);
   if (!response.ok) throw new Error("O roteador aberto (Valhalla) não respondeu.");
   const payload = (await response.json()) as ValhallaRoute;
   const trip = payload.trip;
@@ -153,7 +155,7 @@ async function planWalkingRouteViaOsrm(origin: Coordinates, destination: Coordin
   url.searchParams.set("overview", "full");
   url.searchParams.set("geometries", "geojson");
   url.searchParams.set("steps", "true");
-  const response = await fetch(url, { headers: { "User-Agent": "UrbicoApp/1.0 (projeto pessoal de mobilidade urbana)" } });
+  const response = await fetchWithTimeout(url, { headers: { "User-Agent": "UrbicoApp/1.0 (projeto pessoal de mobilidade urbana)" } });
   if (!response.ok) throw new Error(`O roteador aberto (OSRM) respondeu com status ${response.status}.`);
   const payload = (await response.json()) as OsrmResponse;
   const route = payload.routes?.[0];
