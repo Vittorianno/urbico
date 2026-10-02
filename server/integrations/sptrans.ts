@@ -1,3 +1,5 @@
+import { fetchWithTimeout } from "../_core/http";
+
 const SPTRANS_BASE_URL = "https://api.olhovivo.sptrans.com.br/v2.1";
 
 export type TransitLine = {
@@ -68,7 +70,7 @@ let pendingAuthentication: Promise<string> | null = null;
 
 async function authenticate(): Promise<string> {
   const token = getToken();
-  const login = await fetch(`${SPTRANS_BASE_URL}/Login/Autenticar?token=${encodeURIComponent(token)}`, { method: "POST" });
+  const login = await fetchWithTimeout(`${SPTRANS_BASE_URL}/Login/Autenticar?token=${encodeURIComponent(token)}`, { method: "POST" });
   if (!login.ok || (await login.json().catch(() => false)) !== true) {
     throw new Error("Não foi possível autenticar na fonte de transporte.");
   }
@@ -92,7 +94,7 @@ async function getSessionCookie(forceRefresh = false): Promise<string> {
 
 async function authenticatedRequest<T>(path: string, isRetry = false): Promise<T> {
   const sessionCookie = await getSessionCookie(isRetry);
-  const response = await fetch(`${SPTRANS_BASE_URL}${path}`, {
+  const response = await fetchWithTimeout(`${SPTRANS_BASE_URL}${path}`, {
     headers: { cookie: sessionCookie },
   });
   // Sessão expirada no servidor antes do previsto: reautentica uma vez e tenta de novo.
