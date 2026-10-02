@@ -2,6 +2,7 @@ import { and, count, desc, eq, gt, gte, inArray, isNull, sql } from "drizzle-orm
 import { drizzle } from "drizzle-orm/mysql2";
 import { analyticsEvents, crowdReports, departureAlerts, googleCalendarAccounts, InsertAnalyticsEvent, InsertDepartureAlert, InsertUser, userDataSync, users } from "../drizzle/schema";
 import { ENV } from "./_core/env";
+import { decryptSecret, encryptSecret } from "./_core/secret-box";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
@@ -272,17 +273,30 @@ export async function getAdminOverview() {
 // ---------------------------------------------------------------------------
 // Google Agenda — uma linha por usuário (openId), guarda só o refresh_token
 // (ver comentário em drizzle/schema.ts sobre sensibilidade deste dado).
+// O refresh_token é gravado CRIPTOGRAFADO (AES-256-GCM, ver
+// server/_core/secret-box.ts) e devolvido já descriptografado por
+// getGoogleCalendarAccount — quem chama não precisa saber disso.
 export async function saveGoogleCalendarAccount(openId: string, refreshToken: string) {
   const db = await getDb();
   if (!db) throw new Error("Banco de dados indisponível para conectar o Google Agenda.");
-  await db.insert(googleCalendarAccounts).values({ openId, refreshToken }).onDuplicateKeyUpdate({ set: { refreshToken } });
+  const storedToken = encryptSecret(refreshToken);
+  await db.insert(googleCalendarAccounts).values({ openId, refreshToken: storedToken }).onDuplicateKeyUpdate({ set: { refreshToken: storedToken } });
 }
 
 export async function getGoogleCalendarAccount(openId: string) {
   const db = await getDb();
   if (!db) return null;
   const rows = await db.select().from(googleCalendarAccounts).where(eq(googleCalendarAccounts.openId, openId)).limit(1);
-  return rows[0] ?? null;
+  const row = rows[0];
+  if (!row) return null;
+  try {
+    return { ...row, refreshToken: decryptSecret(row.refreshToken) };
+  } catch (error) {
+    // Chave de criptografia ausente ou trocada: trata como "não conectado"
+    // (a pessoa reconecta) em vez de derrubar a consulta. Nunca loga o token.
+    console.error("[GoogleCalendar] Não foi possível ler o refresh token salvo:", error instanceof Error ? error.message : "erro desconhecido");
+    return null;
+  }
 }
 
 export async function deleteGoogleCalendarAccount(openId: string) {
