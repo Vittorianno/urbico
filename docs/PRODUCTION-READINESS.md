@@ -13,7 +13,15 @@ possível rodar `pnpm check`, `pnpm test` nem o app nesse ambiente: **rode
 | 3 | `express.json({ limit: "50mb" })` sem necessidade | 1 MB |
 | 4 | Requisito "conta só ativa depois de confirmar o e-mail" dependia só de uma opção no painel do Supabase | Servidor recusa criar sessão se `email_confirmed_at` estiver vazio (`SUPABASE_REQUIRE_EMAIL_CONFIRMATION=false` desativa) |
 | 5 | Sem `SIGTERM` gracioso, sem `exit(1)` em falha de boot, sem aviso de config insegura | `index.ts` + `logSecurityWarnings()` |
-| 6 | Sem testes de segurança | `tests/security.test.ts` (CORS e rate limit, sem rede) |
+| 6 | Sem testes de segurança | `tests/security.test.ts` e `tests/hardening.test.ts` (sem rede) |
+| 7 | **Refresh token do Google Agenda gravado em texto puro** no MySQL | `server/_core/secret-box.ts` (AES-256-GCM, chave `TOKEN_ENCRYPTION_KEY`). `db.ts` grava criptografado e lê descriptografado; tokens legados em texto puro continuam legíveis. Em produção, sem a chave, recusa gravar. Se a chave for perdida/trocada, a pessoa precisa reconectar a agenda |
+| 8 | **Nenhuma chamada externa tinha timeout** (Ollama, SPTrans, Nominatim, OSRM, Pelias, Valhalla, Google) | `server/_core/http.ts` (`fetchWithTimeout`, 10 s padrão; Ollama 30 s) aplicado a todas |
+| 9 | **Norby não informava se respondeu via `llm` ou `fallback`** | `askNorbyDetailed()` devolve `{ message, engine, fallbackReason }` e registra `[norby] engine=...` no log. `askNorby()` mantém a assinatura antiga (o router tRPC não mudou) |
+| 10 | Não havia como verificar o Llama sem ler código | `GET /api/norby/status` → `{ configured, reachable, model, modelInstalled }` (consulta o `/api/tags` do Ollama; não expõe a URL) |
+
+> O mecanismo (`engine`) ainda **não** chega ao app: para isso é preciso mudar
+> `norby.chat` em `server/routers.ts` para devolver o objeto de
+> `askNorbyDetailed`. Hoje ele aparece no log do servidor e no endpoint de status.
 
 ### Novas variáveis de ambiente (acrescentar ao `.env.example`)
 
@@ -22,10 +30,29 @@ possível rodar `pnpm check`, `pnpm test` nem o app nesse ambiente: **rode
 | `CORS_ALLOWED_ORIGINS` | Origens web autorizadas em produção, separadas por vírgula. Vazio = nenhum site de outra origem (Android segue funcionando) |
 | `TRUST_PROXY` | Nº de proxies reversos na frente do servidor (padrão em produção: `1`). Necessário para o rate limit enxergar o IP real |
 | `SUPABASE_REQUIRE_EMAIL_CONFIRMATION` | `false` só para desativar temporariamente a exigência de e-mail confirmado |
+| `TOKEN_ENCRYPTION_KEY` | Chave para criptografar o refresh token do Google Agenda (`openssl rand -base64 32`). **Obrigatória em produção** se o Google Agenda estiver ligado. Guarde um backup: sem ela os tokens salvos ficam ilegíveis |
 
 > ⚠️ Atenção ao fazer deploy: se o projeto Supabase estiver com *Confirm email*
 > desligado, o login por e-mail/senha passa a ser recusado pelo servidor até
 > você ligar essa opção no painel (ou definir a flag acima como `false`).
+
+## Verificar o Llama (você, no seu ambiente)
+
+```bash
+ollama list                                   # modelo llama3.2:3b instalado?
+curl -s http://127.0.0.1:11434/api/tags       # Ollama no ar?
+curl -s http://127.0.0.1:3000/api/norby/status  # o backend enxerga o modelo?
+# depois de uma conversa no app, o log do backend mostra:
+#   [norby] engine=llm model=llama3.2:3b      (ou engine=fallback reason=...)
+```
+
+O caminho físico do modelo só o Ollama sabe: `echo $OLLAMA_MODELS` (se vazio, o
+padrão do Ollama no usuário que o executa é `~/.ollama/models`).
+
+> `127.0.0.1:11434` só é alcançável por um backend que rode **no mesmo aparelho**.
+> Um backend hospedado na nuvem não enxerga o Ollama do seu celular — decida entre
+> (a) Ollama num servidor próprio, (b) backend no mesmo aparelho, ou (c) produção
+> só com o fallback por regras.
 
 ## Não commitado: workflow de CI
 
@@ -60,8 +87,14 @@ jobs:
 3. **Gerar e commitar `pnpm-lock.yaml`** (`pnpm install` na raiz). Hoje não há lockfile no repositório: builds do EAS/CI não são reprodutíveis e o README já presume que ele existe.
 4. **`eas init`** para gravar o `projectId` em `app.config.ts` (`extra.eas`) antes do primeiro `eas build`.
 5. **Painel do Supabase**: ligar *Confirm email*, habilitar provedor Google (se usar "Continuar com Google") e cadastrar a *Redirect URL* do esquema `urbico://`. Depois do 1º cadastro real, preencher `OWNER_OPEN_ID` para existir um admin.
-6. **Variáveis de produção**: `JWT_SECRET` (≥ 32 caracteres), `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SPTRANS_TOKEN`, `CORS_ALLOWED_ORIGINS` (se houver cliente web).
+6. **Variáveis de produção**: `JWT_SECRET` (≥ 32 caracteres), `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SPTRANS_TOKEN`, `TOKEN_ENCRYPTION_KEY`, `CORS_ALLOWED_ORIGINS` (se houver cliente web).
 7. **Validar em dispositivo real** (pendência aberta no `todo.md`): GPS em segundo plano, reconhecimento de voz, notificações, MapLibre, SPTrans ponta a ponta.
+
+**Serviços públicos usados como fallback (revisar antes de escalar)**
+
+- **Nominatim público**: a política de uso proíbe autocomplete e limita a ~1 req/s. Para produção, subir um Pelias próprio (`PELIAS_BASE_URL`) ou usar um provedor contratado.
+- **OSRM de demonstração** (`router.project-osrm.org`): até onde sei, hospeda só o perfil de carro e ignora o `/foot/` da URL, então tempos de caminhada podem estar errados. Teste (`curl` de um trajeto curto e compare com a distância/tempo a pé esperado) e, se confirmado, suba um Valhalla próprio (`VALHALLA_BASE_URL`, perfil `pedestrian`).
+- **Roteamento multimodal não existe**: o backend só tem `routing.planWalking` (a pé). Não há `planRoute` no servidor.
 
 **Pendências do `todo.md`**
 
@@ -82,5 +115,6 @@ jobs:
 - Sessão do Urbico dura 1 ano e não há revogação no servidor (logout só limpa o cookie/token local).
 - `crowdReports.submit`, `analytics.track` e `norby.chat` são públicos; o rate limit por IP mitiga mas não impede envenenamento dos dados de lotação. Considerar exigir login ou assinatura do dispositivo para relatos.
 - `departureAlerts.*` identifica o dispositivo só pelo `installationId` (UUID); quem souber o UUID controla o alerta.
+- O `state` do OAuth do Google usa o mesmo `JWT_SECRET` da sessão, sem separação de tipo (risco baixo).
 - Arquivos legados do Manus em `server/_core/` (listados no README) seguem no repositório; remover só após `grep` local.
 - Painel admin está dentro do app (rota restrita a `admin`); a decisão original era um painel separado.
