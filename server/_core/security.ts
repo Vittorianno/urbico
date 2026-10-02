@@ -128,4 +128,7 @@ export function logSecurityWarnings(): void {
   if (!process.env.TRUST_PROXY) {
     console.warn("[security] TRUST_PROXY não definido — assumindo 1 proxy reverso na frente (padrão da maioria das hospedagens).");
   }
+  if (process.env.GOOGLE_CLIENT_ID && !process.env.TOKEN_ENCRYPTION_KEY?.trim()) {
+    console.warn("[security] Google Agenda configurado sem TOKEN_ENCRYPTION_KEY — conectar a agenda vai falhar em produção até definir a chave (`openssl rand -base64 32`).");
+  }
 }
