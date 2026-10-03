@@ -1,0 +1,59 @@
+name: Android APK
+
+# MOVER este arquivo para .github/workflows/android-build.yml
+# (o acesso usado para commitar não tem permissão de escrever em .github/workflows).
+#
+# Gera o projeto nativo (pasta android/ com Gradle) com `expo prebuild`
+# e compila o APK na nuvem. Nada disso precisa rodar na máquina local.
+# Como usar: aba Actions > "Android APK" > Run workflow. O APK fica em
+# "Artifacts" no fim da execução.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.12.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Instalar dependências
+        run: pnpm install --frozen-lockfile
+
+      - name: Gerar projeto Android (prebuild)
+        run: npx expo prebuild --platform android --no-install --clean
+
+      - name: Compilar APK (Gradle)
+        working-directory: android
+        run: ./gradlew assembleRelease --no-daemon
+
+      - name: Enviar APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: urbico-android-apk
+          path: android/app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
+
+      - name: Enviar projeto android/ gerado (com Gradle)
+        uses: actions/upload-artifact@v4
+        with:
+          name: urbico-android-project
+          path: |
+            android
+            !android/**/build
+            !android/.gradle
