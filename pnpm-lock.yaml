@@ -153,8 +153,8 @@ importers:
         specifier: ^3.1.0
         version: 3.3.0(react-native@0.86.0(@babel/core@7.29.7)(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.0))(react@19.2.0)
       react-native-google-mobile-ads:
-        specifier: ^16.5.0
-        version: 16.5.0(expo@57.0.26)(react@19.2.0)
+        specifier: 16.0.0
+        version: 16.0.0(expo@57.0.26)(react@19.2.0)
       react-native-reanimated:
         specifier: 4.6.0
         version: 4.6.0(react-native-worklets@0.12.1(@babel/core@7.29.7)(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(react-native@0.86.0(@babel/core@7.29.7)(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.0))(react@19.2.0))(react-native@0.86.0(@babel/core@7.29.7)(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.0))(react@19.2.0)
@@ -5042,8 +5042,8 @@ packages:
       react: '*'
       react-native: '*'
 
-  react-native-google-mobile-ads@16.5.0:
-    resolution: {integrity: sha512-5x9qieagnvC3UuLbvxb3tUQbr5vSNuGrOvSj/R+UghkcflVz2UbeUcSl41KbAJQAoBkkxPJOqQ+kYxtEQwHgsA==}
+  react-native-google-mobile-ads@16.0.0:
+    resolution: {integrity: sha512-jjSolMj0Q5CBXQjUrow4D0IQ8CpNXocEYYt6xi1xVSUSWg0QQRuTzjXrHLczIMXLm2qWPr1ZllN/VGCOIz0n/g==}
     peerDependencies:
       expo: '>=47.0.0'
     peerDependenciesMeta:
@@ -7737,9 +7737,7 @@ snapshots:
       metro-runtime: 0.84.6
     transitivePeerDependencies:
       - '@babel/core'
-      - bufferutil
       - supports-color
-      - utf-8-validate
 
   '@react-native/normalize-colors@0.74.89': {}
 
@@ -11377,7 +11375,7 @@ snapshots:
       react: 19.2.0
       react-native: 0.86.0(@babel/core@7.29.7)(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.0)
 
-  react-native-google-mobile-ads@16.5.0(expo@57.0.26)(react@19.2.0):
+  react-native-google-mobile-ads@16.0.0(expo@57.0.26)(react@19.2.0):
     dependencies:
       '@iabtcf/core': 1.5.6
       use-deep-compare-effect: 1.8.1(react@19.2.0)
