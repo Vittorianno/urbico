@@ -53,9 +53,15 @@ export function DateInput({ value, onChange, onSubmit, style }: DateInputProps) 
   const [digits, setDigits] = useState(() => isoToDigits(value));
 
   useEffect(() => {
-    if (!value) { setDigits(""); return; }
+    if (!value) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setDigits("");
+      return;
+    }
     const externalDigits = isoToDigits(value);
-    if (externalDigits) setDigits(externalDigits);
+    if (externalDigits) {
+      setDigits(externalDigits);
+    }
   }, [value]);
 
   const handleChangeText = (raw: string) => {

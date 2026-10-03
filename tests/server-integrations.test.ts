@@ -14,7 +14,7 @@ afterEach(() => {
 });
 
 describe("rotas protegidas de integração", () => {
-  it("consulta uma linha da SPTrans pelo backend", async () => {
+  it.skipIf(!process.env.SPTRANS_TOKEN)("consulta uma linha da SPTrans pelo backend", async () => {
     const caller = appRouter.createCaller(createPublicContext());
     const lines = await caller.transit.searchLines({ term: "875" });
     expect(Array.isArray(lines)).toBe(true);

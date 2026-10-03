@@ -188,7 +188,7 @@ export function useTripNavigation() {
       handle?.remove();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeRoute?.destination.latitude, activeRoute?.destination.longitude, boardingStop?.id, alightingStop?.id, trackedVehicle?.id]);
+  }, [activeRoute?.destination.latitude, activeRoute?.destination.longitude, boardingStop?.id, alightingStop?.id, trackedVehicle?.prefix]);
 
   // FIX: "avise quando o ônibus estiver chegando" — enquanto espera no
   // ponto (waiting_at_stop), acompanha a distância real do veículo

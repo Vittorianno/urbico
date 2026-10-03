@@ -2,12 +2,12 @@ import { Tabs } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { HapticTab } from "@/components/haptic-tab";
-import { Platform, Text } from "react-native";
+import { Platform, Text, type TextStyle } from "react-native";
 import { colors } from "@/components/urbico-ui";
 
 const tabGlyphs = { home: "⌂", map: "▣", norby: "◉", profile: "●" } as const;
 
-function TabIcon({ name, color }: { name: keyof typeof tabGlyphs; color: string }) {
+function TabIcon({ name, color }: { name: keyof typeof tabGlyphs; color: TextStyle["color"] }) {
   return <Text style={{ color, fontSize: name === "norby" ? 22 : 24, lineHeight: 27, fontWeight: "800" }}>{tabGlyphs[name]}</Text>;
 }
 

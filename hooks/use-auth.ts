@@ -30,6 +30,7 @@ export function useAuth(options?: UseAuthOptions) {
             name: apiUser.name,
             email: apiUser.email,
             loginMethod: apiUser.loginMethod,
+            role: apiUser.role,
             lastSignedIn: new Date(apiUser.lastSignedIn),
           };
           setUser(userInfo);
@@ -70,6 +71,7 @@ export function useAuth(options?: UseAuthOptions) {
           name: apiUser.name,
           email: apiUser.email,
           loginMethod: apiUser.loginMethod,
+          role: apiUser.role,
           lastSignedIn: new Date(apiUser.lastSignedIn),
         };
         setUser(userInfo);

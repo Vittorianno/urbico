@@ -19,7 +19,7 @@ export default function MapScreen() {
   const selected = context.data?.lines[0];
   const vehicles = useMemo(() => (selected?.vehicles ?? []).map((vehicle) => ({ id: vehicle.prefix, label: `Veículo ${vehicle.prefix}`, latitude: vehicle.latitude, longitude: vehicle.longitude })), [selected?.vehicles]);
   const stops = useMemo(() => (selected?.stops ?? []).map((stop) => ({ id: String(stop.id), label: stop.name, latitude: stop.latitude, longitude: stop.longitude })), [selected?.stops]);
-  useEffect(() => { if (currentLocation) setCenter(currentLocation); }, [currentLocation]);
+  const mapCenter = currentLocation ?? center;
   // FIX (analytics): map_opened uma vez por montagem da tela — ver
   // docs/analytics.md.
   useEffect(() => { analytics.track("map_opened"); }, []);
@@ -44,7 +44,7 @@ export default function MapScreen() {
           <View style={styles.headerActions}><Pressable accessibilityLabel="Planejar rota" onPress={() => router.push("/routes")}><MaterialIcons name="search" size={22} color={colors.text} /></Pressable><MaterialIcons name="layers" size={21} color={colors.text} /></View>
         </View>
 
-        <View style={styles.mapCanvas}><UrbicoMap center={center} userLocation={currentLocation} path={activeRoute?.points ?? []} vehicles={vehicles} stops={stops} /><Text style={styles.attribution}>© OpenStreetMap contributors · OpenFreeMap</Text><Pressable onPress={() => void locate()} style={({ pressed }) => [styles.locateButton, pressed && styles.pressed]}><MaterialIcons name="my-location" size={23} color={colors.text} /></Pressable></View>
+        <View style={styles.mapCanvas}><UrbicoMap center={mapCenter} userLocation={currentLocation} path={activeRoute?.points ?? []} vehicles={vehicles} stops={stops} /><Text style={styles.attribution}>© OpenStreetMap contributors · OpenFreeMap</Text><Pressable onPress={() => void locate()} style={({ pressed }) => [styles.locateButton, pressed && styles.pressed]}><MaterialIcons name="my-location" size={23} color={colors.text} /></Pressable></View>
 
         <InfoCard style={styles.bottomCard}>
           <View style={styles.bottomHeader}><View style={styles.busMini}><MaterialIcons name="directions-bus" size={21} color={colors.blue} /></View><Text style={styles.bottomTitle}>{activeRoute?.line ? `Linha ${activeRoute.line.label}` : "Sem linha selecionada"}</Text></View>

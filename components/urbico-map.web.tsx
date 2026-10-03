@@ -11,7 +11,9 @@ export function UrbicoMap({ center, userLocation, path, vehicles, stops, onMapPr
   const container = useRef<HTMLDivElement | null>(null);
   const map = useRef<MapLibreMap | null>(null);
   const pressHandler = useRef(onMapPress);
-  pressHandler.current = onMapPress;
+  useEffect(() => {
+    pressHandler.current = onMapPress;
+  }, [onMapPress]);
   // FIX: guarda o centro só para a criação inicial do mapa. O centro "ao
   // vivo" é aplicado pelo outro efeito abaixo via easeTo, sem depender deste ref.
   const initialCenter = useRef(center);

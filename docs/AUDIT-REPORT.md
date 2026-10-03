@@ -25,6 +25,21 @@
 
 # URBICO — Relatório de Auditoria Executivo
 
+> **Atualização da auditoria (02/10/2026):** o repositório foi revalidado em
+> ambiente limpo e recebeu correções de compatibilidade sem alterar a proposta
+> do produto. `pnpm check`, `pnpm lint`, `pnpm test` e `pnpm build` passam; a
+> suíte terminou com **18 testes aprovados e 3 condicionais ignorados** (dois
+> testes de SPTrans por ausência de `SPTRANS_TOKEN` e o teste de logout já
+> marcado como `skip`). O endpoint local `/api/health` respondeu corretamente.
+> A validação real da SPTrans continua pendente até que o proprietário forneça
+> a credencial oficial; nenhuma credencial foi inventada ou adicionada.
+>
+> Correções incluídas nesta rodada: tipagem Expo/React Navigation e AdMob,
+> propagação do papel `admin` ao cliente, proteção de acesso nulo na tela de
+> viagem, correções de lint no mapa/data, atualização do callback do mapa web,
+> ajuste da resposta de anonimato do Norby e inclusão do `pnpm-lock.yaml` para
+> instalações reprodutíveis.
+
 **Data:** 2026-09-06  
 **Repositório:** Vittorianno/urbico  
 **Status:** Pronto para teste real em dispositivo Android  

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { StyleSheet, View } from "react-native";
-import mobileAds, { AdEventType, BannerAd, BannerAdSize, TestIds } from "react-native-google-mobile-ads";
+import mobileAds, { BannerAd, BannerAdSize, TestIds } from "react-native-google-mobile-ads";
 
 import { analytics } from "@/lib/analytics";
 import { colors } from "@/components/urbico-ui";
@@ -56,14 +56,8 @@ export function AdBanner() {
         size={BannerAdSize.ANCHORED_ADAPTIVE_BANNER}
         onAdLoaded={() => setLoaded(true)}
         onAdFailedToLoad={() => setLoaded(false)}
-        // FIX (analytics): ad_impression/ad_clicked — ver docs/analytics.md.
-        // AdEventType.OPENED dispara quando a pessoa toca no anúncio e ele
-        // abre (navegador/loja de apps), o sinal mais próximo de "clique"
-        // que o SDK expõe para banners.
-        onAdEvent={(type) => {
-          if (type === AdEventType.LOADED) analytics.track("ad_impression");
-          else if (type === AdEventType.OPENED) analytics.track("ad_clicked");
-        }}
+        onAdImpression={() => analytics.track("ad_impression")}
+        onAdClicked={() => analytics.track("ad_clicked")}
       />
     </View>
   );

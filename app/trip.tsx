@@ -49,7 +49,7 @@ export default function TripScreen() {
     if (nav.watchError) Alert.alert("Localização indisponível", nav.watchError);
   }, [nav.watchError]);
 
-  const statusBanner = !nav.stopsAvailable && activeRoute.line
+  const statusBanner = !nav.stopsAvailable && activeRoute?.line
     ? { icon: "cloud-off" as const, text: "Não foi possível carregar as paradas desta linha agora. Verifique sua conexão ou tente novamente em instantes." }
     : nav.sptransUnavailable
       ? { icon: "cloud-off" as const, text: "Os dados da SPTrans/Olho Vivo estão indisponíveis no momento. As instruções de caminhada continuam funcionando; o acompanhamento do ônibus, não." }
@@ -57,7 +57,7 @@ export default function TripScreen() {
         ? { icon: "directions-bus-filled" as const, text: "Nenhum veículo desta linha está reportando posição em tempo real agora — sem dado real de ônibus para acompanhar." }
         : null;
 
-  const mapVehicles = useMemo(() => (nav.trackedVehicle ? [{ id: nav.trackedVehicle.prefix, label: activeRoute?.line ? `Linha ${activeRoute.line.label}` : `Veículo ${nav.trackedVehicle.prefix}`, latitude: nav.trackedVehicle.latitude, longitude: nav.trackedVehicle.longitude }] : []), [nav.trackedVehicle, activeRoute?.line]);
+  const mapVehicles = useMemo(() => (nav.trackedVehicle ? [{ id: nav.trackedVehicle.prefix, label: activeRoute?.line ? `Linha ${activeRoute.line.label}` : `Veículo ${nav.trackedVehicle.prefix}`, latitude: nav.trackedVehicle.latitude, longitude: nav.trackedVehicle.longitude }] : []), [nav.trackedVehicle, activeRoute]);
   const mapStops = useMemo(() => {
     const stops: { id: string; label: string; latitude: number; longitude: number }[] = [];
     if (nav.boardingStop) stops.push({ id: `board-${nav.boardingStop.id}`, label: `Embarque · ${nav.boardingStop.name}`, latitude: nav.boardingStop.latitude, longitude: nav.boardingStop.longitude });

@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 const SPTRANS_BASE_URL = "http://api.olhovivo.sptrans.com.br/v2.1";
 
 describe("integrações abertas e comerciais", () => {
-  it("autentica o token da fonte pública de dados de trânsito da SPTrans", async () => {
+  it.skipIf(!process.env.SPTRANS_TOKEN)("autentica o token da fonte pública de dados de trânsito da SPTrans", async () => {
     const token = process.env.SPTRANS_TOKEN;
     expect(token, "SPTRANS_TOKEN deve estar configurado").toBeTruthy();
     const response = await fetch(`${SPTRANS_BASE_URL}/Login/Autenticar?token=${encodeURIComponent(token ?? "")}`, { method: "POST" });

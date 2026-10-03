@@ -43,7 +43,7 @@ function NorbyAvatar({ large = false }: { large?: boolean }) {
 }
 
 export default function NorbyScreen() {
-  const { messages, sendMessage, addNorbyMessage, clearMessages, addCrowdReport, voiceEnabled, activeRoute, currentLocation, startTrip } = useUrbico();
+  const { messages, sendMessage, addNorbyMessage, clearMessages, addCrowdReport, voiceEnabled, activeRoute, startTrip } = useUrbico();
   const [draft, setDraft] = useState("");
   const [isListening, setIsListening] = useState(false);
   const [showConversation, setShowConversation] = useState(true);

@@ -10,7 +10,7 @@ export function getNorbyReply(text: string, transportContext?: string) {
     // FIX: antes mandava a pessoa pra uma tela dedicada de relato ("tela de
     // Viagem"), que foi removida — agora sou eu (Norby) quem pergunta sobre
     // a lotação durante a viagem, então a resposta reflete isso.
-    return "Durante a viagem eu mesmo pergunto como está a lotação do ônibus — é só me responder por voz ou texto quando eu perguntar, e eu registro de forma anônima para ajudar outras pessoas.";
+    return "Durante a viagem eu mesmo pergunto como está a lotação do ônibus — é só me responder por voz ou texto quando eu perguntar, e eu registro de forma anônima, sem exibir sua identidade, para ajudar outras pessoas.";
   }
   if (normalized.includes("chega") || normalized.includes("ônibus") || normalized.includes("onibus")) {
     return transportContext ? `Consultei o contexto de viagem disponível: ${transportContext}. Abra Mapa ou Próximos ônibus para confirmar a atualização mais recente.` : "Ainda não recebi uma previsão oficial para essa consulta. Abra Mapa ou Próximos ônibus para consultar a linha e a lotação disponíveis.";

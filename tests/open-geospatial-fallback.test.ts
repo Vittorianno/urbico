@@ -29,7 +29,7 @@ describe("open geospatial fallback", () => {
     await expect(suggestAddresses("Avenida Paulista")).resolves.toEqual([
       { name: "Avenida Paulista", address: "Avenida Paulista, São Paulo - SP", latitude: -23.561, longitude: -46.656 },
     ]);
-    const calledUrl = String(fetchMock.mock.calls[0]?.[0]);
+    const calledUrl = String((fetchMock.mock.calls[0] as unknown[] | undefined)?.[0]);
     expect(calledUrl).toContain("nominatim.openstreetmap.org");
   });
 
@@ -59,7 +59,7 @@ describe("open geospatial fallback", () => {
       points: [[-46.656, -23.561], [-46.633, -23.55]],
       instructions: [{ text: "Siga em Rua Exemplo", distanceMeters: 850, durationSeconds: 640 }],
     });
-    const calledUrl = String(fetchMock.mock.calls[0]?.[0]);
+    const calledUrl = String((fetchMock.mock.calls[0] as unknown[] | undefined)?.[0]);
     expect(calledUrl).toContain("router.project-osrm.org");
   });
 });

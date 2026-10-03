@@ -49,6 +49,8 @@ export default function RoutesScreen() {
   // campo "De" em branco para a pessoa decidir livremente.
   useEffect(() => {
     if (!params.destination || origin) return;
+    // A tela sincroniza deliberadamente o estado inicial com o parâmetro de rota.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLocatingOrigin(true);
     setOriginError(null);
     getCurrentUrbicoLocation()
