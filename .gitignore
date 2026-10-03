@@ -49,7 +49,7 @@ app-example
 
 # generated native folders
 /ios
-/android
+# A pasta android/ nativa gerada pelo Expo é versionada.
 
 # IDE
 .vscode/*

@@ -1,8 +1,5 @@
 name: Android APK
 
-# MOVER este arquivo para .github/workflows/android-build.yml
-# (o acesso usado para commitar não tem permissão de escrever em .github/workflows).
-#
 # Gera o projeto nativo (pasta android/ com Gradle) com `expo prebuild`
 # e compila o APK na nuvem. Nada disso precisa rodar na máquina local.
 # Como usar: aba Actions > "Android APK" > Run workflow. O APK fica em
