@@ -39,6 +39,22 @@ jobs:
         working-directory: android
         run: ./gradlew assembleRelease --no-daemon
 
+      - name: Assinar APK para instalação local
+        working-directory: android/app/build/outputs/apk/release
+        run: |
+          keytool -genkeypair -v \
+            -keystore /tmp/urbico-release.keystore \
+            -storepass urbico-dev-only \
+            -keypass urbico-dev-only \
+            -alias urbico-dev \
+            -keyalg RSA -keysize 2048 -validity 3650 \
+            -dname "CN=Urbico Development,O=Urbico,C=BR"
+          jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 \
+            -keystore /tmp/urbico-release.keystore \
+            -storepass urbico-dev-only -keypass urbico-dev-only \
+            app-release.apk urbico-dev
+          jarsigner -verify -verbose app-release.apk
+
       - name: Enviar APK
         uses: actions/upload-artifact@v4
         with:
