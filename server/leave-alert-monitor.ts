@@ -1,6 +1,6 @@
 import { closestTo, distanceMeters, estimateLeaveAlert } from "../lib/leave-alert";
 import * as db from "./db";
-import { planWalkingRoute } from "./integrations/open-geospatial";
+import { planWalkingRoute } from "./integrations/geospatial";
 import { getLineStops, getLineVehicles } from "./integrations/sptrans";
 
 const toNumber = (value: string | number | null) => (value === null ? null : Number(value));
@@ -32,6 +32,9 @@ export async function evaluateDepartureAlerts(now = new Date()) {
       // Parada de desembarque: a parada da própria linha mais próxima do destino do compromisso.
       const alightingStop = closestTo(destination, stops);
 
+      // Custo: planWalkingRoute passa pela fachada de geospatial.ts, que usa
+      // cache (coordenadas arredondadas a ~11 m, TTL 10 min), deduplicação e
+      // teto diário — este job NÃO gera uma chamada Google por avaliação.
       const [walkingRoute, vehicles, finalWalkingRoute] = await Promise.all([
         planWalkingRoute(user, boardingStop.item),
         getLineVehicles(alert.lineId),
