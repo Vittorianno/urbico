@@ -1,4 +1,4 @@
-import { boolean, decimal, int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
+import { boolean, decimal, index, int, mysqlEnum, mysqlTable, text, timestamp, tinyint, varchar } from "drizzle-orm/mysql-core";
 
 /**
  * Core user table backing auth flow.
@@ -53,21 +53,77 @@ export type DepartureAlert = typeof departureAlerts.$inferSelect;
 export type InsertDepartureAlert = typeof departureAlerts.$inferInsert;
 
 /**
- * Relatos de lotação por linha. Anônimo por design: não guarda
- * installationId nem qualquer identificador de quem reportou, apenas a
- * linha, o nível relatado e o momento — o suficiente para agregar por
- * recência/quantidade sem expor identidade (ver decisão de produto do
- * Urbico sobre lotação colaborativa).
+ * Relatos de lotação por linha. Histórico: anônimo por design — sem
+ * installationId nem qualquer identificador de quem reportou.
+ *
+ * Etapa 4: colunas OPCIONAIS (relatos antigos continuam válidos, com NULL):
+ *  - tripId / direction / vehiclePrefix: contexto da viagem do relato.
+ *  - reporterKey: HMAC (não reversível sem o segredo do servidor) do
+ *    installationId, usado SOMENTE para anti-spam e para contar cada pessoa
+ *    uma vez na estimativa. Nunca é exposto pela API.
  */
-export const crowdReports = mysqlTable("crowd_reports", {
-  id: int("id").autoincrement().primaryKey(),
-  lineId: int("line_id").notNull(),
-  level: mysqlEnum("level", ["Vazio", "Baixa", "Normal", "Alta", "Lotado"]).notNull(),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+export const crowdReports = mysqlTable(
+  "crowd_reports",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    lineId: int("line_id").notNull(),
+    level: mysqlEnum("level", ["Vazio", "Baixa", "Normal", "Alta", "Lotado"]).notNull(),
+    tripId: int("trip_id"),
+    direction: tinyint("direction"),
+    vehiclePrefix: varchar("vehicle_prefix", { length: 32 }),
+    reporterKey: varchar("reporter_key", { length: 32 }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("crowd_reports_line_created_idx").on(table.lineId, table.createdAt),
+    index("crowd_reports_reporter_created_idx").on(table.reporterKey, table.createdAt),
+  ],
+);
 
 export type CrowdReport = typeof crowdReports.$inferSelect;
 export type InsertCrowdReport = typeof crowdReports.$inferInsert;
+
+/**
+ * Viagem ativa de um passageiro (Etapa 4): "este aparelho está usando/
+ * acompanhando esta linha agora". Chave de dono = installationId (mesmo
+ * identificador anônimo por aparelho dos alertas de saída): o Urbico
+ * funciona sem login.
+ *
+ * Privacidade: só a ÚLTIMA posição, arredondada (~110 m), e apagada ao
+ * encerrar/expirar a viagem. Nunca há trilha de posições.
+ * Ciclo de vida: ACTIVE -> COMPLETED | CANCELLED | EXPIRED (expiração preguiçosa
+ * por falta de sinal; ver lib/trip-rules.ts).
+ */
+export const trips = mysqlTable(
+  "trips",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    installationId: varchar("installation_id", { length: 64 }).notNull(),
+    lineId: int("line_id").notNull(),
+    // Sentido SPTrans (1 ou 2) quando conhecido; NULL se indisponível.
+    direction: tinyint("direction"),
+    // Só gravado quando confirmado contra os veículos reais da SPTrans.
+    vehiclePrefix: varchar("vehicle_prefix", { length: 32 }),
+    originLabel: varchar("origin_label", { length: 160 }),
+    destinationLabel: varchar("destination_label", { length: 160 }),
+    boardingStopId: int("boarding_stop_id"),
+    alightingStopId: int("alighting_stop_id"),
+    status: mysqlEnum("status", ["ACTIVE", "COMPLETED", "CANCELLED", "EXPIRED"]).default("ACTIVE").notNull(),
+    startedAt: timestamp("started_at").defaultNow().notNull(),
+    checkedInAt: timestamp("checked_in_at"),
+    lastSeenAt: timestamp("last_seen_at").defaultNow().notNull(),
+    endedAt: timestamp("ended_at"),
+    approxLatitude: decimal("approx_latitude", { precision: 8, scale: 3 }),
+    approxLongitude: decimal("approx_longitude", { precision: 9, scale: 3 }),
+  },
+  (table) => [
+    index("trips_installation_status_idx").on(table.installationId, table.status),
+    index("trips_line_status_seen_idx").on(table.lineId, table.status, table.lastSeenAt),
+  ],
+);
+
+export type Trip = typeof trips.$inferSelect;
+export type InsertTrip = typeof trips.$inferInsert;
 
 /**
  * Uma linha por usuário conectado ao Google Agenda. Guarda só o
