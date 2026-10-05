@@ -51,6 +51,15 @@ const config: ExpoConfig = {
     },
     predictiveBackGestureEnabled: false,
     package: env.androidPackage,
+    // Google Maps SDK (react-native-maps, PROVIDER_GOOGLE). A chave Android vai
+    // para o AndroidManifest no build — restrinja-a no Google Cloud Console por
+    // package (com.app.urbico) + SHA-1/SHA-256 do certificado de assinatura e
+    // só à "Maps SDK for Android".
+    config: {
+      googleMaps: {
+        apiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_API_KEY,
+      },
+    },
     permissions: ["POST_NOTIFICATIONS", "ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION", "ACCESS_BACKGROUND_LOCATION", "FOREGROUND_SERVICE", "FOREGROUND_SERVICE_LOCATION"],
     intentFilters: [
       {
@@ -81,7 +90,6 @@ const config: ExpoConfig = {
   },
   plugins: [
     "expo-router",
-    "@maplibre/maplibre-react-native",
     [
       "expo-location",
       {

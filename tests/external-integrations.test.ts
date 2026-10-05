@@ -13,15 +13,16 @@ describe("integrações abertas e comerciais", () => {
     await expect(response.json()).resolves.toBe(true);
   }, 15_000);
 
-  it("usa MapLibre e o estilo público OpenFreeMap, sem configuração de Google Maps", async () => {
+  it("usa Google Maps no mapa nativo e web, sem MapLibre", async () => {
     const [nativeMap, webMap, config] = await Promise.all([readFile("./components/urbico-map.native.tsx", "utf8"), readFile("./components/urbico-map.web.tsx", "utf8"), readFile("./app.config.ts", "utf8")]);
-    expect(nativeMap).toContain("@maplibre/maplibre-react-native");
-    expect(webMap).toContain("tiles.openfreemap.org/styles/liberty");
-    expect(config).toContain("@maplibre/maplibre-react-native");
-    expect(config).not.toContain("googleMapsApiKey");
-    expect(config).not.toContain("googleMaps:");
-    expect(webMap).toContain("setWorkerUrl");
-    expect(webMap).toContain("maplibre-gl-worker.mjs");
+    expect(nativeMap).toContain("react-native-maps");
+    expect(nativeMap).toContain("PROVIDER_GOOGLE");
+    expect(webMap).toContain("maps.googleapis.com/maps/api/js");
+    expect(webMap).toContain("EXPO_PUBLIC_GOOGLE_MAPS_WEB_API_KEY");
+    expect(config).toContain("googleMaps");
+    expect(nativeMap).not.toContain("maplibre");
+    expect(webMap).not.toContain("maplibre");
+    expect(config).not.toContain("@maplibre/maplibre-react-native");
   });
 
   it("não usa um domínio Supabase fictício quando o ambiente está incompleto", async () => {
