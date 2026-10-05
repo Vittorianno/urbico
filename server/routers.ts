@@ -4,7 +4,7 @@ import { ANALYTICS_EVENTS } from "../lib/analytics-events";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { adminProcedure, protectedProcedure, publicProcedure, router } from "./_core/trpc";
-import { geocode, planWalkingRoute, suggestAddresses } from "./integrations/open-geospatial";
+import { geocode, geospatialStatus, planWalkingRoute, suggestAddresses } from "./integrations/geospatial";
 import { askNorby } from "./integrations/norby";
 import { getLineStops, getLineVehicles, getStopPredictions, searchLines, searchStops } from "./integrations/sptrans";
 import {
@@ -126,10 +126,9 @@ export const appRouter = router({
     })),
   }),
   routing: router({
-    status: publicProcedure.query(() => ({
-      geocodingAvailable: Boolean(process.env.PELIAS_BASE_URL?.trim()),
-      routingAvailable: Boolean(process.env.VALHALLA_BASE_URL?.trim()),
-    })),
+    // Mantém geocodingAvailable/routingAvailable (contrato anterior) e
+    // acrescenta `provider` ("google" | "open") — ver server/integrations/geospatial.ts.
+    status: publicProcedure.query(() => geospatialStatus()),
     geocode: publicProcedure.input(z.object({ query: z.string().trim().min(2).max(160) })).query(({ input }) => safeIntegration(() => geocode(input.query))),
     suggestAddresses: publicProcedure.input(z.object({ query: z.string().trim().min(2).max(160) })).query(({ input }) => safeIntegration(() => suggestAddresses(input.query))),
     // FIX: origin/destination antes eram sempre geocodificados por texto via
