@@ -16,6 +16,7 @@ import {
   signGoogleOAuthState,
   updateGoogleCalendarEvent,
 } from "./integrations/google-calendar";
+import { crowdProcedures, tripRouter } from "./trip-router";
 import * as db from "./db";
 
 const safeIntegration = async <T>(operation: () => Promise<T>) => {
@@ -25,8 +26,6 @@ const safeIntegration = async <T>(operation: () => Promise<T>) => {
     throw new Error("A integração está indisponível no momento. Tente novamente em instantes.");
   }
 };
-
-const crowdLevelSchema = z.enum(["Vazio", "Baixa", "Normal", "Alta", "Lotado"]);
 
 // FIX (sincronização na nuvem): schemas dos itens salvos localmente
 // (favoritos/compromissos), usados só para validar o payload de
@@ -197,13 +196,14 @@ export const appRouter = router({
       return alert ? { armed: alert.isEnabled && alert.locationConsented, alertedAt: alert.alertedAt?.toISOString() ?? null, appointmentLabel: alert.appointmentLabel } : { armed: false, alertedAt: null, appointmentLabel: null };
     }),
   }),
-  // Agregação colaborativa de lotação por linha. Anônima por design: o
-  // servidor nunca recebe nem grava qualquer identificador do dispositivo.
+  // Viagem ativa + CHECK_IN (Etapa 4) — ver server/trip-router.ts.
+  trip: tripRouter,
+  // Lotação colaborativa por linha. `submit`, `estimate` e `history` vêm de
+  // server/trip-router.ts (anti-spam, vínculo opcional com a viagem,
+  // estimativa com confiança). `recent`/`recentBatch` seguem como antes
+  // (moda dos últimos 30 min) para não quebrar telas existentes.
   crowdReports: router({
-    submit: publicProcedure.input(z.object({ lineId: z.number().int().positive(), level: crowdLevelSchema })).mutation(async ({ input }) => {
-      await db.insertCrowdReport(input.lineId, input.level);
-      return { submitted: true };
-    }),
+    ...crowdProcedures,
     recent: publicProcedure.input(z.object({ lineId: z.number().int().positive() })).query(async ({ input }) => {
       const summary = await db.getRecentCrowdSummary(input.lineId);
       return summary ?? { level: null, totalReports: 0, levelIndex: -1 };
