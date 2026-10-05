@@ -4,11 +4,13 @@ import { useEffect, useMemo, useState } from "react";
 import { Alert, Pressable, Share, StyleSheet, Text, View } from "react-native";
 
 import { CrowdLevelBadge } from "@/components/crowd-level";
+import { CrowdReportBar } from "@/components/crowd-report-bar";
 import { ScreenContainer } from "@/components/screen-container";
 import { UrbicoMap } from "@/components/urbico-map";
 import { colors, PrimaryButton, SecondaryButton } from "@/components/urbico-ui";
 import { confirmAsync } from "@/lib/confirm";
 import { useTripNavigation, type NavigationPhase } from "@/lib/trip-navigation";
+import { useTripSession } from "@/lib/use-trip-session";
 import { getCurrentUrbicoLocation } from "@/lib/location-service";
 import { trpc } from "@/lib/trpc";
 import { useUrbico } from "@/lib/urbico-context";
@@ -35,10 +37,15 @@ export default function TripScreen() {
   const [recentering, setRecentering] = useState(false);
   const lineId = activeRoute?.line?.id ?? null;
 
-  const crowdSummaryQuery = trpc.crowdReports.recent.useQuery({ lineId: lineId ?? 0 }, { enabled: Boolean(lineId), refetchInterval: 60_000 });
+  // Viagem no servidor (CHECK_IN/CHECK_OUT, sinal de vida, relatos). A
+  // navegação local continua funcionando mesmo se o servidor falhar.
+  const session = useTripSession({ lineId, phase: nav.phase, location: currentLocation });
+
+  // Estimativa de lotação (relatos recentes ponderados + CHECK_INS), no lugar da moda simples.
+  const crowdEstimateQuery = trpc.crowdReports.estimate.useQuery({ lineId: lineId ?? 0 }, { enabled: Boolean(lineId), refetchInterval: 60_000 });
   const latestCrowd = crowdReports.at(-1) ?? null;
-  const displayedLevel = lineId ? (crowdSummaryQuery.data?.level ?? null) : latestCrowd;
-  const aggregatedCount = crowdSummaryQuery.data?.totalReports ?? 0;
+  const displayedLevel = lineId ? (crowdEstimateQuery.data?.level ?? null) : latestCrowd;
+  const aggregatedCount = crowdEstimateQuery.data?.reportCount ?? 0;
 
   // FIX: GPS indisponível/permissão negada continua avisado por Alert (é um
   // erro pontual, faz sentido interromper) — mas SPTrans fora do ar ou sem
@@ -55,7 +62,9 @@ export default function TripScreen() {
       ? { icon: "cloud-off" as const, text: "Os dados da SPTrans/Olho Vivo estão indisponíveis no momento. As instruções de caminhada continuam funcionando; o acompanhamento do ônibus, não." }
       : nav.noVehicleTracked
         ? { icon: "directions-bus-filled" as const, text: "Nenhum veículo desta linha está reportando posição em tempo real agora — sem dado real de ônibus para acompanhar." }
-        : null;
+        : session.error
+          ? { icon: "cloud-off" as const, text: session.error }
+          : null;
 
   const mapVehicles = useMemo(() => (nav.trackedVehicle ? [{ id: nav.trackedVehicle.prefix, label: activeRoute?.line ? `Linha ${activeRoute.line.label}` : `Veículo ${nav.trackedVehicle.prefix}`, latitude: nav.trackedVehicle.latitude, longitude: nav.trackedVehicle.longitude }] : []), [nav.trackedVehicle, activeRoute]);
   const mapStops = useMemo(() => {
@@ -99,6 +108,7 @@ export default function TripScreen() {
   const confirmFinish = async () => {
     const confirmed = await confirmAsync("Encerrar viagem?", "O acompanhamento por GPS será interrompido.", "Encerrar", true);
     if (!confirmed) return;
+    await session.end();
     nav.cancel();
     endTrip();
     router.replace("/");
@@ -191,6 +201,8 @@ export default function TripScreen() {
               <CrowdLevelBadge level={displayedLevel} count={lineId ? aggregatedCount : undefined} compact />
             </View>
           </View>
+
+          {nav.phase === "on_bus" && lineId ? <CrowdReportBar onReport={session.report} /> : null}
 
           {nav.phase === "waiting_at_stop" ? (
             <SecondaryButton label="Confirmar embarque" icon="check-circle" onPress={nav.confirmBoarding} style={styles.confirmButton} />
