@@ -1,8 +1,7 @@
 import AntDesign from "@expo/vector-icons/AntDesign";
-import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { router } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -31,6 +30,11 @@ type Mode = "signIn" | "signUp";
 // e-mail/senha continua disponível como alternativa.
 export default function LoginScreen() {
   const { refresh } = useAuth({ autoFetch: false });
+  const completingSession = useRef<{
+    token: string;
+    promise: Promise<void>;
+  } | null>(null);
+  const pendingMethod = useRef<"password" | "google">("google");
   const [mode, setMode] = useState<Mode>("signIn");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -44,19 +48,39 @@ export default function LoginScreen() {
   // FIX (analytics): `method` identifica como a sessão foi concluída
   // ("password" | "google"), registrado como user_login — ponto único de
   // login com sucesso, independente do caminho que levou até aqui.
-  const completeUrbicoSession = async (accessToken: string, method: "password" | "google") => {
-    const established = await Api.establishSession(accessToken);
-    if (!established) {
-      Alert.alert("Erro ao entrar", "Não foi possível iniciar a sessão. Tente novamente.");
-      return;
-    }
-    if (Platform.OS !== "web") {
-      const { setSessionToken } = await import("@/lib/_core/auth");
-      await setSessionToken(accessToken);
-    }
-    analytics.track("user_login", { method });
-    await refresh();
-    router.back();
+  const completeUrbicoSession = (
+    accessToken: string,
+    method: "password" | "google",
+  ) => {
+    if (completingSession.current?.token === accessToken)
+      return completingSession.current.promise;
+
+    const promise = (async () => {
+      const urbicoSessionToken = await Api.establishSession(accessToken);
+      if (!urbicoSessionToken)
+        throw new Error("Não foi possível iniciar a sessão. Tente novamente.");
+      if (Platform.OS !== "web") {
+        const { setSessionToken } = await import("@/lib/_core/auth");
+        await setSessionToken(urbicoSessionToken);
+      }
+      const user = await refresh();
+      if (!user)
+        throw new Error(
+          "A sessão foi criada, mas o usuário não pôde ser carregado.",
+        );
+      analytics.track("user_login", { method });
+      // O guard global também cobre recarregamentos e links diretos; aqui a
+      // troca explícita evita depender da tela anterior e remove o login do
+      // histórico de navegação.
+      router.replace("/(tabs)");
+    })();
+
+    completingSession.current = { token: accessToken, promise };
+    void promise.catch(() => {
+      if (completingSession.current?.token === accessToken)
+        completingSession.current = null;
+    });
+    return promise;
   };
 
   // FIX: no fluxo "Continuar com Google", a sessão do Supabase é concluída
@@ -67,24 +91,42 @@ export default function LoginScreen() {
   // a lógica de "o que fazer quando o login termina".
   useEffect(() => {
     if (!isSupabaseConfigured) return;
-    const { data: subscription } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === "SIGNED_IN" && session?.access_token) {
-        setLoading(true);
-        completeUrbicoSession(session.access_token, "google").finally(() => setLoading(false));
-      }
-    });
+    const { data: subscription } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        if (event === "SIGNED_IN" && session?.access_token) {
+          setLoading(true);
+          void completeUrbicoSession(
+            session.access_token,
+            pendingMethod.current,
+          )
+            .catch((err) => {
+              Alert.alert(
+                "Erro ao entrar",
+                err instanceof Error ? err.message : "Tente novamente.",
+              );
+            })
+            .finally(() => setLoading(false));
+        }
+      },
+    );
     return () => subscription.subscription.unsubscribe();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleSubmit = async () => {
     if (!isSupabaseConfigured) {
-      Alert.alert("Login indisponível", "Configure EXPO_PUBLIC_SUPABASE_URL e EXPO_PUBLIC_SUPABASE_ANON_KEY no ambiente do app.");
+      Alert.alert(
+        "Login indisponível",
+        "Configure EXPO_PUBLIC_SUPABASE_URL e EXPO_PUBLIC_SUPABASE_ANON_KEY no ambiente do app.",
+      );
       return;
     }
     const trimmedEmail = email.trim();
     if (!trimmedEmail || !password) {
-      Alert.alert("Dados incompletos", "Preencha e-mail e senha para continuar.");
+      Alert.alert(
+        "Dados incompletos",
+        "Preencha e-mail e senha para continuar.",
+      );
       return;
     }
     if (isSignUp && password.length < 6) {
@@ -94,12 +136,21 @@ export default function LoginScreen() {
 
     setLoading(true);
     try {
+      pendingMethod.current = "password";
       const { data, error } = isSignUp
         ? await supabase.auth.signUp({ email: trimmedEmail, password })
-        : await supabase.auth.signInWithPassword({ email: trimmedEmail, password });
+        : await supabase.auth.signInWithPassword({
+            email: trimmedEmail,
+            password,
+          });
 
       if (error) {
-        Alert.alert(isSignUp ? "Não foi possível criar a conta" : "Não foi possível entrar", error.message);
+        Alert.alert(
+          isSignUp
+            ? "Não foi possível criar a conta"
+            : "Não foi possível entrar",
+          error.message,
+        );
         return;
       }
 
@@ -120,7 +171,10 @@ export default function LoginScreen() {
 
       await completeUrbicoSession(accessToken, "password");
     } catch (err) {
-      Alert.alert("Erro inesperado", err instanceof Error ? err.message : "Tente novamente em instantes.");
+      Alert.alert(
+        "Erro inesperado",
+        err instanceof Error ? err.message : "Tente novamente em instantes.",
+      );
     } finally {
       setLoading(false);
     }
@@ -132,13 +186,20 @@ export default function LoginScreen() {
   // fica ligado à identidade do Google via Supabase, não a um dispositivo).
   const continueWithGoogle = async () => {
     if (!isSupabaseConfigured) {
-      Alert.alert("Login indisponível", "Configure EXPO_PUBLIC_SUPABASE_URL e EXPO_PUBLIC_SUPABASE_ANON_KEY no ambiente do app.");
+      Alert.alert(
+        "Login indisponível",
+        "Configure EXPO_PUBLIC_SUPABASE_URL e EXPO_PUBLIC_SUPABASE_ANON_KEY no ambiente do app.",
+      );
       return;
     }
     setLoading(true);
+    pendingMethod.current = "google";
     try {
       if (Platform.OS === "web") {
-        const { error } = await supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo: window.location.href } });
+        const { error } = await supabase.auth.signInWithOAuth({
+          provider: "google",
+          options: { redirectTo: window.location.href },
+        });
         if (error) {
           Alert.alert("Não foi possível continuar com o Google", error.message);
           setLoading(false);
@@ -153,25 +214,38 @@ export default function LoginScreen() {
         options: { redirectTo: "urbico://login", skipBrowserRedirect: true },
       });
       if (error || !data?.url) {
-        Alert.alert("Não foi possível continuar com o Google", error?.message ?? "Tente novamente.");
+        Alert.alert(
+          "Não foi possível continuar com o Google",
+          error?.message ?? "Tente novamente.",
+        );
         setLoading(false);
         return;
       }
-      const result = await WebBrowser.openAuthSessionAsync(data.url, "urbico://login");
+      const result = await WebBrowser.openAuthSessionAsync(
+        data.url,
+        "urbico://login",
+      );
       if (result.type !== "success") {
         setLoading(false);
         return;
       }
-      const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(result.url);
+      const { error: exchangeError } =
+        await supabase.auth.exchangeCodeForSession(result.url);
       if (exchangeError) {
-        Alert.alert("Não foi possível continuar com o Google", exchangeError.message);
+        Alert.alert(
+          "Não foi possível continuar com o Google",
+          exchangeError.message,
+        );
         setLoading(false);
         return;
       }
       // O exchangeCodeForSession acima já dispara o onAuthStateChange
       // (SIGNED_IN), que conclui a sessão do Urbico sozinho.
     } catch (err) {
-      Alert.alert("Erro inesperado", err instanceof Error ? err.message : "Tente novamente em instantes.");
+      Alert.alert(
+        "Erro inesperado",
+        err instanceof Error ? err.message : "Tente novamente em instantes.",
+      );
       setLoading(false);
     }
   };
@@ -183,10 +257,10 @@ export default function LoginScreen() {
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
         <View style={styles.header}>
-          <Pressable onPress={() => router.back()} style={({ pressed }) => [styles.back, pressed && styles.pressed]}>
-            <MaterialIcons name="arrow-back" size={22} color={colors.text} />
-          </Pressable>
-          <Text style={styles.title}>{isSignUp ? "Criar conta" : "Entrar"}</Text>
+          <View style={styles.back} />
+          <Text style={styles.title}>
+            {isSignUp ? "Criar conta" : "Entrar"}
+          </Text>
           <View style={styles.back} />
         </View>
 
@@ -197,7 +271,13 @@ export default function LoginScreen() {
             </View>
           ) : (
             <>
-              <Pressable onPress={() => void continueWithGoogle()} style={({ pressed }) => [styles.google, pressed && styles.pressed]}>
+              <Pressable
+                onPress={() => void continueWithGoogle()}
+                style={({ pressed }) => [
+                  styles.google,
+                  pressed && styles.pressed,
+                ]}
+              >
                 <AntDesign name="google" size={18} color="#4285F4" />
                 <Text style={styles.googleText}>Continuar com Google</Text>
               </Pressable>
@@ -247,7 +327,10 @@ export default function LoginScreen() {
           <Pressable
             onPress={() => setMode(isSignUp ? "signIn" : "signUp")}
             disabled={loading}
-            style={({ pressed }) => [styles.switchMode, pressed && styles.pressed]}
+            style={({ pressed }) => [
+              styles.switchMode,
+              pressed && styles.pressed,
+            ]}
           >
             <Text style={styles.switchModeText}>
               {isSignUp ? "Já tem conta? Entrar" : "Não tem conta? Criar uma"}
@@ -261,16 +344,48 @@ export default function LoginScreen() {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  header: { height: 50, paddingHorizontal: 20, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  back: { width: 42, height: 42, alignItems: "center", justifyContent: "center" },
+  header: {
+    height: 50,
+    paddingHorizontal: 20,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  back: {
+    width: 42,
+    height: 42,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   title: { color: colors.text, fontSize: 18, fontWeight: "700" },
   form: { padding: 20, paddingTop: 10 },
-  google: { height: 50, borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10 },
+  google: {
+    height: 50,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.card,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+  },
   googleText: { color: colors.text, fontSize: 14, fontWeight: "700" },
-  dividerRow: { marginTop: 18, flexDirection: "row", alignItems: "center", gap: 10 },
+  dividerRow: {
+    marginTop: 18,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
   dividerLine: { flex: 1, height: 1, backgroundColor: colors.border },
   dividerText: { color: colors.muted, fontSize: 11, fontWeight: "700" },
-  label: { color: colors.muted, fontSize: 12, fontWeight: "700", marginBottom: 6, marginTop: 18 },
+  label: {
+    color: colors.muted,
+    fontSize: 12,
+    fontWeight: "700",
+    marginBottom: 6,
+    marginTop: 18,
+  },
   input: {
     height: 50,
     borderRadius: 14,
@@ -282,7 +397,13 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   submit: { marginTop: 26 },
-  loading: { marginTop: 6, marginBottom: 12, height: 48, alignItems: "center", justifyContent: "center" },
+  loading: {
+    marginTop: 6,
+    marginBottom: 12,
+    height: 48,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   switchMode: { marginTop: 18, alignItems: "center", paddingVertical: 8 },
   switchModeText: { color: colors.blue, fontSize: 13, fontWeight: "700" },
   pressed: { opacity: 0.7 },

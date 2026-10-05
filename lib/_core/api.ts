@@ -2,7 +2,10 @@ import { Platform } from "react-native";
 import { getApiBaseUrl } from "@/constants/oauth";
 import * as Auth from "./auth";
 
-export async function apiCall<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+export async function apiCall<T>(
+  endpoint: string,
+  options: RequestInit = {},
+): Promise<T> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     ...((options.headers as Record<string, string>) || {}),
@@ -42,7 +45,9 @@ export async function apiCall<T>(endpoint: string, options: RequestInit = {}): P
       } catch {
         // Not JSON, use text as is
       }
-      throw new Error(errorMessage || `API call failed: ${response.statusText}`);
+      throw new Error(
+        errorMessage || `API call failed: ${response.statusText}`,
+      );
     }
 
     const contentType = response.headers.get("content-type");
@@ -91,7 +96,7 @@ export async function getMe(): Promise<{
 // Called after receiving a Supabase access token from app/login.tsx, to get
 // a proper Set-Cookie response from the backend and (on web) let the
 // browser store it.
-export async function establishSession(token: string): Promise<boolean> {
+export async function establishSession(token: string): Promise<string | null> {
   try {
     const baseUrl = getApiBaseUrl();
     const url = `${baseUrl}/api/auth/session`;
@@ -107,12 +112,13 @@ export async function establishSession(token: string): Promise<boolean> {
 
     if (!response.ok) {
       console.error("[API] establishSession failed:", response.status);
-      return false;
+      return null;
     }
 
-    return true;
+    const result = (await response.json()) as { app_session_id?: string };
+    return result.app_session_id || null;
   } catch (error) {
     console.error("[API] establishSession error:", error);
-    return false;
+    return null;
   }
 }

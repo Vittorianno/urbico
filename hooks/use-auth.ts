@@ -1,91 +1,88 @@
 import * as Api from "@/lib/_core/api";
 import * as Auth from "@/lib/_core/auth";
 import { analytics } from "@/lib/analytics";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  createContext,
+  createElement,
+  type ReactNode,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { Platform } from "react-native";
 
 type UseAuthOptions = {
+  /** Mantido por compatibilidade; o estado agora é carregado pelo AuthProvider. */
   autoFetch?: boolean;
 };
 
-export function useAuth(options?: UseAuthOptions) {
-  const { autoFetch = true } = options ?? {};
+type AuthContextValue = {
+  user: Auth.User | null;
+  loading: boolean;
+  error: Error | null;
+  isAuthenticated: boolean;
+  refresh: () => Promise<Auth.User | null>;
+  logout: () => Promise<void>;
+};
+
+const AuthContext = createContext<AuthContextValue | undefined>(undefined);
+
+function apiUserToAuthUser(
+  apiUser: NonNullable<Awaited<ReturnType<typeof Api.getMe>>>,
+): Auth.User {
+  return {
+    id: apiUser.id,
+    openId: apiUser.openId,
+    name: apiUser.name,
+    email: apiUser.email,
+    loginMethod: apiUser.loginMethod,
+    role: apiUser.role,
+    lastSignedIn: new Date(apiUser.lastSignedIn),
+  };
+}
+
+export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<Auth.User | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
-  const fetchUser = useCallback(async () => {
+  const refresh = useCallback(async (): Promise<Auth.User | null> => {
+    setLoading(true);
+    setError(null);
+
     try {
-      setLoading(true);
-      setError(null);
-
-      // Web platform: use cookie-based auth, fetch user from API
-      if (Platform.OS === "web") {
-        const apiUser = await Api.getMe();
-
-        if (apiUser) {
-          const userInfo: Auth.User = {
-            id: apiUser.id,
-            openId: apiUser.openId,
-            name: apiUser.name,
-            email: apiUser.email,
-            loginMethod: apiUser.loginMethod,
-            role: apiUser.role,
-            lastSignedIn: new Date(apiUser.lastSignedIn),
-          };
-          setUser(userInfo);
-          // Cache user info in localStorage for faster subsequent loads
-          await Auth.setUserInfo(userInfo);
-        } else {
+      // Sempre valida a sessão no backend. O cache é apenas uma otimização de
+      // dados, nunca uma segunda fonte de verdade nem prova de autenticação.
+      if (Platform.OS !== "web") {
+        const sessionToken = await Auth.getSessionToken();
+        if (!sessionToken) {
           setUser(null);
           await Auth.clearUserInfo();
+          return null;
         }
-        return;
-      }
-
-      // Native platform: token-based auth
-      const sessionToken = await Auth.getSessionToken();
-      if (!sessionToken) {
-        setUser(null);
-        return;
-      }
-
-      // FIX: antes, um token de sessão válido sem usuário em cache local fazia
-      // o app tratar a pessoa como deslogada — mesmo com uma sessão válida no
-      // servidor. Isso podia acontecer, por exemplo, se o callback OAuth
-      // recebesse o token sem os dados do usuário, ou se o cache fosse limpo
-      // independentemente do SecureStore. Agora, quando há token mas não há
-      // cache, o usuário é buscado na API (que já anexa o Bearer token
-      // automaticamente em apiCall para plataformas nativas) antes de desistir.
-      const cachedUser = await Auth.getUserInfo();
-      if (cachedUser) {
-        setUser(cachedUser);
-        return;
       }
 
       const apiUser = await Api.getMe();
-      if (apiUser) {
-        const userInfo: Auth.User = {
-          id: apiUser.id,
-          openId: apiUser.openId,
-          name: apiUser.name,
-          email: apiUser.email,
-          loginMethod: apiUser.loginMethod,
-          role: apiUser.role,
-          lastSignedIn: new Date(apiUser.lastSignedIn),
-        };
-        setUser(userInfo);
-        await Auth.setUserInfo(userInfo);
-      } else {
-        // O token realmente não corresponde a uma sessão válida no servidor.
+      if (!apiUser) {
         setUser(null);
         await Auth.removeSessionToken();
+        await Auth.clearUserInfo();
+        return null;
       }
+
+      const nextUser = apiUserToAuthUser(apiUser);
+      setUser(nextUser);
+      await Auth.setUserInfo(nextUser);
+      return nextUser;
     } catch (err) {
-      const error = err instanceof Error ? err : new Error("Failed to fetch user");
-      console.error("[useAuth] fetchUser error:", error);
-      setError(error);
+      const nextError =
+        err instanceof Error ? err : new Error("Falha ao verificar a sessão");
+      console.error("[useAuth] refresh error:", nextError);
+      setError(nextError);
       setUser(null);
+      return null;
     } finally {
       setLoading(false);
     }
@@ -96,11 +93,7 @@ export function useAuth(options?: UseAuthOptions) {
       await Api.logout();
     } catch (err) {
       console.error("[Auth] Logout API call failed:", err);
-      // Continue with logout even if API call fails
     } finally {
-      // FIX (analytics): user_logout registrado aqui — ponto único de
-      // logout do app (ver docs/analytics.md), independente de qual tela
-      // chamou logout().
       analytics.track("user_logout");
       await Auth.removeSessionToken();
       await Auth.clearUserInfo();
@@ -109,36 +102,28 @@ export function useAuth(options?: UseAuthOptions) {
     }
   }, []);
 
-  const isAuthenticated = useMemo(() => Boolean(user), [user]);
-
   useEffect(() => {
-    if (autoFetch) {
-      if (Platform.OS === "web") {
-        // Web: fetch user from API directly (user will login manually if needed)
-        fetchUser();
-      } else {
-        // Native: check for cached user info first for faster initial load
-        Auth.getUserInfo().then((cachedUser) => {
-          if (cachedUser) {
-            setUser(cachedUser);
-            setLoading(false);
-          } else {
-            // No cached user, check session token (and fall back to the API)
-            fetchUser();
-          }
-        });
-      }
-    } else {
-      setLoading(false);
-    }
-  }, [autoFetch, fetchUser]);
+    void refresh();
+  }, [refresh]);
 
-  return {
-    user,
-    loading,
-    error,
-    isAuthenticated,
-    refresh: fetchUser,
-    logout,
-  };
+  const value = useMemo<AuthContextValue>(
+    () => ({
+      user,
+      loading,
+      error,
+      isAuthenticated: Boolean(user),
+      refresh,
+      logout,
+    }),
+    [error, loading, logout, refresh, user],
+  );
+
+  return createElement(AuthContext.Provider, { value }, children);
+}
+
+export function useAuth(_options?: UseAuthOptions): AuthContextValue {
+  const context = useContext(AuthContext);
+  if (!context)
+    throw new Error("useAuth deve ser usado dentro de AuthProvider");
+  return context;
 }

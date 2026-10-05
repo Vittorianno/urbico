@@ -2,15 +2,16 @@ import "@/lib/polyfills";
 import "@/global.css";
 import "@/lib/departure-location-task";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Stack } from "expo-router";
+import { router, Stack, usePathname } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import "react-native-reanimated";
-import { Platform } from "react-native";
+import { ActivityIndicator, Platform, View } from "react-native";
 import { ThemeProvider } from "@/lib/theme-provider";
 import { CloudSync } from "@/lib/cloud-sync";
 import { UrbicoProvider } from "@/lib/urbico-context";
+import { AuthProvider, useAuth } from "@/hooks/use-auth";
 import {
   SafeAreaFrameContext,
   SafeAreaInsetsContext,
@@ -21,10 +22,43 @@ import type { EdgeInsets, Metrics, Rect } from "react-native-safe-area-context";
 
 import { analytics } from "@/lib/analytics";
 import { trpc, createTRPCClient } from "@/lib/trpc";
-import { initManusRuntime, subscribeSafeAreaInsets } from "@/lib/_core/manus-runtime";
+import {
+  initManusRuntime,
+  subscribeSafeAreaInsets,
+} from "@/lib/_core/manus-runtime";
 
 const DEFAULT_WEB_INSETS: EdgeInsets = { top: 0, right: 0, bottom: 0, left: 0 };
 const DEFAULT_WEB_FRAME: Rect = { x: 0, y: 0, width: 0, height: 0 };
+
+function AuthGuard() {
+  const pathname = usePathname();
+  const { loading, isAuthenticated } = useAuth();
+  const isLoginRoute = pathname === "/login" || pathname.startsWith("/login/");
+
+  useEffect(() => {
+    if (loading) return;
+    if (isAuthenticated && isLoginRoute) {
+      router.replace("/(tabs)");
+    } else if (!isAuthenticated && !isLoginRoute) {
+      router.replace("/login");
+    }
+  }, [isAuthenticated, isLoginRoute, loading]);
+
+  if (!loading) return null;
+  return (
+    <View
+      style={{
+        position: "absolute",
+        inset: 0,
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: "#08131F",
+      }}
+    >
+      <ActivityIndicator color="#4DA3FF" />
+    </View>
+  );
+}
 
 export const unstable_settings = {
   anchor: "(tabs)",
@@ -77,7 +111,10 @@ export default function RootLayout() {
 
   // Ensure minimum 8px padding for top and bottom on mobile
   const providerInitialMetrics = useMemo(() => {
-    const metrics = initialWindowMetrics ?? { insets: initialInsets, frame: initialFrame };
+    const metrics = initialWindowMetrics ?? {
+      insets: initialInsets,
+      frame: initialFrame,
+    };
     return {
       ...metrics,
       insets: {
@@ -94,19 +131,25 @@ export default function RootLayout() {
         <QueryClientProvider client={queryClient}>
           {/* Default to hiding native headers so raw route segments don't appear (e.g. "(tabs)", "products/[id]"). */}
           {/* If a screen needs the native header, explicitly enable it and set a human title via Stack.Screen options. */}
-          <UrbicoProvider>
-            {/* FIX (sincronização na nuvem): montado uma única vez aqui,
+          <AuthProvider>
+            <UrbicoProvider>
+              {/* FIX (sincronização na nuvem): montado uma única vez aqui,
                 fora de qualquer tela — não pertence à Agenda, aos Favoritos
                 nem a nenhuma área específica. Não renderiza nada; só
                 mantém favoritos/agenda/preferências sincronizados com a
                 conta quando a pessoa está logada (ver lib/cloud-sync.tsx). */}
-            <CloudSync />
-            <Stack screenOptions={{ headerShown: false }}>
-              <Stack.Screen name="(tabs)" />
-              <Stack.Screen name="login" options={{ presentation: "fullScreenModal" }} />
-              <Stack.Screen name="admin" />
-            </Stack>
-          </UrbicoProvider>
+              <CloudSync />
+              <Stack screenOptions={{ headerShown: false }}>
+                <Stack.Screen name="(tabs)" />
+                <Stack.Screen
+                  name="login"
+                  options={{ presentation: "fullScreenModal" }}
+                />
+                <Stack.Screen name="admin" />
+              </Stack>
+              <AuthGuard />
+            </UrbicoProvider>
+          </AuthProvider>
           <StatusBar style="light" />
         </QueryClientProvider>
       </trpc.Provider>
@@ -131,7 +174,9 @@ export default function RootLayout() {
 
   return (
     <ThemeProvider>
-      <SafeAreaProvider initialMetrics={providerInitialMetrics}>{content}</SafeAreaProvider>
+      <SafeAreaProvider initialMetrics={providerInitialMetrics}>
+        {content}
+      </SafeAreaProvider>
     </ThemeProvider>
   );
 }
