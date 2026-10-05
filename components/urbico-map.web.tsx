@@ -6,6 +6,10 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import type { UrbicoMapProps } from "./urbico-map.types";
 
 const OPEN_FREE_MAP_STYLE = "https://tiles.openfreemap.org/styles/liberty";
+// O Metro não reescreve de forma confiável a URL automática do worker do
+// MapLibre. Sem esta definição o navegador tenta carregar um worker relativo
+// inexistente e o mapa fica completamente em branco ("Worker failed to load").
+const MAPLIBRE_WORKER_URL = "https://unpkg.com/maplibre-gl@6.11.2/dist/maplibre-gl-worker.mjs";
 
 export function UrbicoMap({ center, userLocation, path, vehicles, stops, onMapPress }: UrbicoMapProps) {
   const container = useRef<HTMLDivElement | null>(null);
@@ -27,6 +31,7 @@ export function UrbicoMap({ center, userLocation, path, vehicles, stops, onMapPr
   // abaixo (igual à versão nativa, que já fazia isso corretamente).
   useEffect(() => {
     if (!container.current || map.current) return;
+    maplibregl.setWorkerUrl(MAPLIBRE_WORKER_URL);
     const instance = new maplibregl.Map({ container: container.current, style: OPEN_FREE_MAP_STYLE, center: [initialCenter.current.longitude, initialCenter.current.latitude], zoom: 14.5 });
     map.current = instance;
     instance.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");

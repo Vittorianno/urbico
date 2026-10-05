@@ -4,19 +4,19 @@ import { Platform } from "react-native";
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+const hasValidSupabaseUrl = Boolean(supabaseUrl && /^https:\/\/[^\s/]+\.supabase\.co(?:\/.*)?$/i.test(supabaseUrl));
 
-if (!supabaseUrl || !supabaseAnonKey) {
+export const isSupabaseConfigured = hasValidSupabaseUrl && Boolean(supabaseAnonKey);
+
+if (!isSupabaseConfigured) {
   // Não lança: o app deve continuar abrindo (outras telas não dependem de
   // login) mesmo sem essas variáveis configuradas, só o login em si falha.
   // Ver README "Autenticação (Supabase Auth)".
   //
-  // FIX: createClient() do @supabase/supabase-js lança exceção síncrona
-  // ("supabaseUrl is required.") se receber uma URL vazia — isso derrubava
-  // o app inteiro (e o SSR do Expo Router) em vez de só desabilitar o
-  // login, contradizendo o comentário acima. Por isso usamos uma URL
-  // placeholder válida (não vazia) quando a variável não está configurada,
-  // mantendo o cliente instanciável; qualquer chamada de auth real vai
-  // falhar normalmente contra esse host inexistente, o que é aceitável.
+  // O cliente continua instanciável para que as telas públicas do app abram,
+  // mas o login verifica isSupabaseConfigured antes de fazer qualquer chamada.
+  // O endereço local reservado evita uma tentativa DNS contra um domínio
+  // fictício e torna a falha de configuração explícita e determinística.
   console.error(
     "[Supabase] EXPO_PUBLIC_SUPABASE_URL/EXPO_PUBLIC_SUPABASE_ANON_KEY não configurados — login indisponível.",
   );
@@ -29,8 +29,8 @@ if (!supabaseUrl || !supabaseAnonKey) {
  * ler/gravar tabelas do Supabase diretamente.
  */
 export const supabase = createClient(
-  supabaseUrl || "https://placeholder.supabase.co",
-  supabaseAnonKey || "placeholder-anon-key",
+  hasValidSupabaseUrl ? supabaseUrl : "http://127.0.0.1:9",
+  supabaseAnonKey || "disabled-anon-key",
   {
     auth: {
       // AsyncStorage funciona em web e nativo; no web o Supabase já usa

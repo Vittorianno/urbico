@@ -20,6 +20,14 @@ describe("integrações abertas e comerciais", () => {
     expect(config).toContain("@maplibre/maplibre-react-native");
     expect(config).not.toContain("googleMapsApiKey");
     expect(config).not.toContain("googleMaps:");
+    expect(webMap).toContain("setWorkerUrl");
+    expect(webMap).toContain("maplibre-gl-worker.mjs");
+  });
+
+  it("não usa um domínio Supabase fictício quando o ambiente está incompleto", async () => {
+    const supabase = await readFile("./lib/_core/supabase.ts", "utf8");
+    expect(supabase).not.toContain("placeholder.supabase.co");
+    expect(supabase).toContain("isSupabaseConfigured");
   });
 
   it("mantém roteamento e autocomplete preparados para instâncias próprias de Pelias e Valhalla", async () => {

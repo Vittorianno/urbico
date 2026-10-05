@@ -20,7 +20,7 @@ import { colors, PrimaryButton } from "@/components/urbico-ui";
 import { useAuth } from "@/hooks/use-auth";
 import * as Api from "@/lib/_core/api";
 import { analytics } from "@/lib/analytics";
-import { supabase } from "@/lib/_core/supabase";
+import { isSupabaseConfigured, supabase } from "@/lib/_core/supabase";
 
 type Mode = "signIn" | "signUp";
 
@@ -66,6 +66,7 @@ export default function LoginScreen() {
   // Um único listener de onAuthStateChange cobre os dois casos sem duplicar
   // a lógica de "o que fazer quando o login termina".
   useEffect(() => {
+    if (!isSupabaseConfigured) return;
     const { data: subscription } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === "SIGNED_IN" && session?.access_token) {
         setLoading(true);
@@ -77,6 +78,10 @@ export default function LoginScreen() {
   }, []);
 
   const handleSubmit = async () => {
+    if (!isSupabaseConfigured) {
+      Alert.alert("Login indisponível", "Configure EXPO_PUBLIC_SUPABASE_URL e EXPO_PUBLIC_SUPABASE_ANON_KEY no ambiente do app.");
+      return;
+    }
     const trimmedEmail = email.trim();
     if (!trimmedEmail || !password) {
       Alert.alert("Dados incompletos", "Preencha e-mail e senha para continuar.");
@@ -126,6 +131,10 @@ export default function LoginScreen() {
   // Urbico ao reinstalar o app ou trocar de aparelho (o openId do usuário
   // fica ligado à identidade do Google via Supabase, não a um dispositivo).
   const continueWithGoogle = async () => {
+    if (!isSupabaseConfigured) {
+      Alert.alert("Login indisponível", "Configure EXPO_PUBLIC_SUPABASE_URL e EXPO_PUBLIC_SUPABASE_ANON_KEY no ambiente do app.");
+      return;
+    }
     setLoading(true);
     try {
       if (Platform.OS === "web") {
