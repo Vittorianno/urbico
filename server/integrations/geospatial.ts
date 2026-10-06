@@ -6,10 +6,11 @@
 //   Sem GEO_PROVIDER: usa Google quando GOOGLE_MAPS_SERVER_API_KEY existe;
 //   caso contrário, usa o provider aberto (Nominatim/OSRM/Pelias/Valhalla).
 //
-// Se o Google falhar (inclusive por teto diário de chamadas), cai para o
-// provider aberto — o app nunca fica sem busca/rota por causa de custo.
-// Quando a migração estiver validada em produção, remover open-geospatial.ts
-// e este fallback.
+// Se o Google falhar (chave inválida, API desativada, teto diário, rede), cai
+// para o provider aberto e NÃO tenta o Google de novo por GOOGLE_BLOCK_MS
+// (disjuntor): evita uma chamada Google com falha a cada tecla digitada e
+// evita encher o log. Quando a migração estiver validada em produção,
+// remover open-geospatial.ts e este fallback.
 import {
   geocodeViaGoogle,
   isGoogleGeospatialConfigured,
@@ -19,6 +20,13 @@ import {
 import * as open from "./open-geospatial";
 
 export type { Coordinates, GeocodedPlace, WalkingRoute } from "./open-geospatial";
+
+const GOOGLE_BLOCK_MS = 2 * 60 * 1000;
+let googleBlockedUntil = 0;
+
+export function resetGeospatialCircuitForTests() {
+  googleBlockedUntil = 0;
+}
 
 export function activeGeospatialProvider(): "google" | "open" {
   const forced = process.env.GEO_PROVIDER?.trim().toLowerCase();
@@ -35,36 +43,32 @@ export function geospatialStatus() {
   };
 }
 
+async function tryGoogle<T>(label: string, run: () => Promise<T>): Promise<{ used: true; value: T } | { used: false }> {
+  if (activeGeospatialProvider() !== "google" || Date.now() < googleBlockedUntil) return { used: false };
+  try {
+    return { used: true, value: await run() };
+  } catch (error) {
+    googleBlockedUntil = Date.now() + GOOGLE_BLOCK_MS;
+    console.warn(`[geospatial] Google indisponível para ${label}; usando provider aberto por 2 min:`, error instanceof Error ? error.message : error);
+    return { used: false };
+  }
+}
+
 export async function suggestAddresses(query: string): Promise<open.GeocodedPlace[]> {
   if (query.trim().length < 2) return [];
-  if (activeGeospatialProvider() === "google") {
-    try {
-      return await suggestAddressesViaGoogle(query);
-    } catch (error) {
-      console.warn("[geospatial] Google indisponível para busca; usando provider aberto:", error instanceof Error ? error.message : error);
-    }
-  }
+  const google = await tryGoogle("busca", () => suggestAddressesViaGoogle(query));
+  if (google.used) return google.value;
   return open.suggestAddresses(query);
 }
 
 export async function geocode(query: string) {
-  if (activeGeospatialProvider() === "google") {
-    try {
-      return await geocodeViaGoogle(query);
-    } catch (error) {
-      console.warn("[geospatial] Google indisponível para geocodificação; usando provider aberto:", error instanceof Error ? error.message : error);
-    }
-  }
+  const google = await tryGoogle("geocodificação", () => geocodeViaGoogle(query));
+  if (google.used) return google.value;
   return open.geocode(query);
 }
 
 export async function planWalkingRoute(origin: open.Coordinates, destination: open.Coordinates): Promise<open.WalkingRoute | null> {
-  if (activeGeospatialProvider() === "google") {
-    try {
-      return await planWalkingRouteViaGoogle(origin, destination);
-    } catch (error) {
-      console.warn("[geospatial] Google indisponível para rota; usando provider aberto:", error instanceof Error ? error.message : error);
-    }
-  }
+  const google = await tryGoogle("rota", () => planWalkingRouteViaGoogle(origin, destination));
+  if (google.used) return google.value;
   return open.planWalkingRoute(origin, destination);
 }
