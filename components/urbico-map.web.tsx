@@ -9,6 +9,10 @@
 //
 // Sem tipos do Google instalados (@types/google.maps) de propósito: a API é
 // acessada via window.google com tipagem mínima, sem nova dependência.
+//
+// Carregamento: script com `callback` + `libraries=marker`. O callback só é
+// chamado quando a API terminou de inicializar, então google.maps.Map e
+// google.maps.marker existem — sem depender de importLibrary.
 import { useEffect, useRef, useState } from "react";
 
 import type { UrbicoMapProps } from "./urbico-map.types";
@@ -18,21 +22,30 @@ export type { MapCoordinate, MapStop, MapVehicle } from "./urbico-map.types";
 const WEB_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_WEB_API_KEY?.trim();
 const MAP_ID = process.env.EXPO_PUBLIC_GOOGLE_MAP_ID?.trim() || "DEMO_MAP_ID";
 const ZOOM = 14.5;
+const READY_CALLBACK = "__urbicoGoogleMapsReady";
+const AUTH_FAILURE_MESSAGE =
+  "O Google Maps recusou a chave. Confira a chave, se a Maps JavaScript API está ativada com cobrança e se as restrições de site incluem este endereço (ex.: http://localhost:8081/*).";
 
 let loader: Promise<void> | null = null;
+let authFailed = false;
+const authListeners = new Set<() => void>();
 
 function loadGoogleMaps(key: string): Promise<void> {
-  const existing = (window as any).google?.maps?.importLibrary;
-  if (existing) return Promise.resolve();
+  if ((window as any).google?.maps?.Map) return Promise.resolve();
   if (loader) return loader;
+  // O Google chama gm_authFailure quando a chave é inválida/não autorizada.
+  (window as any).gm_authFailure = () => {
+    authFailed = true;
+    authListeners.forEach((listener) => listener());
+  };
   loader = new Promise<void>((resolve, reject) => {
+    (window as any)[READY_CALLBACK] = () => resolve();
     const script = document.createElement("script");
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&v=weekly&loading=async&language=pt-BR&region=BR`;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&libraries=marker&v=weekly&language=pt-BR&region=BR&callback=${READY_CALLBACK}`;
     script.async = true;
-    script.onload = () => resolve();
     script.onerror = () => {
       loader = null;
-      reject(new Error("Não foi possível carregar o Google Maps."));
+      reject(new Error("Não foi possível carregar o Google Maps (rede ou bloqueador de anúncios)."));
     };
     document.head.appendChild(script);
   });
@@ -80,11 +93,19 @@ export function UrbicoMap({ center, userLocation, path, vehicles, stops, onMapPr
   const pressHandler = useRef(onMapPress);
   const initialCenter = useRef(center);
   const [ready, setReady] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(authFailed ? AUTH_FAILURE_MESSAGE : null);
 
   useEffect(() => {
     pressHandler.current = onMapPress;
   }, [onMapPress]);
+
+  useEffect(() => {
+    const listener = () => setError(AUTH_FAILURE_MESSAGE);
+    authListeners.add(listener);
+    return () => {
+      authListeners.delete(listener);
+    };
+  }, []);
 
   // Cria o mapa uma única vez; mudanças de centro são aplicadas pelo efeito
   // seguinte (panTo), sem recriar o mapa nem perder o zoom da pessoa.
@@ -95,11 +116,11 @@ export function UrbicoMap({ center, userLocation, path, vehicles, stops, onMapPr
       try {
         await loadGoogleMaps(WEB_API_KEY);
         const gmaps = (window as any).google.maps;
-        const { Map } = await gmaps.importLibrary("maps");
-        const { AdvancedMarkerElement } = await gmaps.importLibrary("marker");
+        const AdvancedMarkerElement = gmaps.marker?.AdvancedMarkerElement;
+        if (!AdvancedMarkerElement) throw new Error("A biblioteca de marcadores do Google Maps não carregou.");
         if (cancelled || !container.current) return;
         markerClass.current = AdvancedMarkerElement;
-        const map = new Map(container.current, {
+        const map = new gmaps.Map(container.current, {
           center: { lat: initialCenter.current.latitude, lng: initialCenter.current.longitude },
           zoom: ZOOM,
           mapId: MAP_ID,
