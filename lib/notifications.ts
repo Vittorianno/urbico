@@ -64,6 +64,29 @@ export async function enableTravelNotifications(): Promise<boolean> {
   }
 }
 
+export type NotificationPermissionStatus = "granted" | "denied" | "undetermined" | "unsupported";
+
+/**
+ * Permissão de notificação concedida pelo SISTEMA (ou navegador) — coisa
+ * diferente da preferência do usuário dentro do app. Só consulta; nunca pede.
+ */
+export async function getNotificationPermissionStatus(): Promise<NotificationPermissionStatus> {
+  try {
+    if (Platform.OS === "web") {
+      if (typeof window === "undefined" || typeof window.Notification === "undefined") return "unsupported";
+      const permission = window.Notification.permission;
+      return permission === "granted" ? "granted" : permission === "denied" ? "denied" : "undetermined";
+    }
+    const current = await Notifications.getPermissionsAsync();
+    if (current.status === "granted") return "granted";
+    if (current.status === "denied") return "denied";
+    return "undetermined";
+  } catch (error) {
+    console.warn("[urbico] getNotificationPermissionStatus falhou:", error);
+    return "unsupported";
+  }
+}
+
 export async function scheduleTravelNotice(title: string, body: string) {
   if (Platform.OS === "web") return null;
   return Notifications.scheduleNotificationAsync({
