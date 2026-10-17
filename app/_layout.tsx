@@ -7,7 +7,7 @@ import { StatusBar } from "expo-status-bar";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import "react-native-reanimated";
-import { ActivityIndicator, Platform, View } from "react-native";
+import { Platform } from "react-native";
 import { ThemeProvider } from "@/lib/theme-provider";
 import { CloudSync } from "@/lib/cloud-sync";
 import { UrbicoProvider } from "@/lib/urbico-context";
@@ -30,6 +30,12 @@ import {
 const DEFAULT_WEB_INSETS: EdgeInsets = { top: 0, right: 0, bottom: 0, left: 0 };
 const DEFAULT_WEB_FRAME: Rect = { x: 0, y: 0, width: 0, height: 0 };
 
+// Modo visitante: o app NÃO exige login. Mapa, linhas, rotas e Norby abrem
+// direto; quem quiser conta entra por Perfil → "Entrar ou criar conta". O guard
+// só faz uma coisa: tirar da tela de login quem já está autenticado (evita
+// ficar preso nela depois do login). Não há overlay bloqueante de carregamento
+// — a sessão é retomada em segundo plano e o Perfil mostra o próprio estado de
+// carregamento, sem travar as telas públicas.
 function AuthGuard() {
   const pathname = usePathname();
   const { loading, isAuthenticated } = useAuth();
@@ -39,25 +45,10 @@ function AuthGuard() {
     if (loading) return;
     if (isAuthenticated && isLoginRoute) {
       router.replace("/(tabs)");
-    } else if (!isAuthenticated && !isLoginRoute) {
-      router.replace("/login");
     }
   }, [isAuthenticated, isLoginRoute, loading]);
 
-  if (!loading) return null;
-  return (
-    <View
-      style={{
-        position: "absolute",
-        inset: 0,
-        alignItems: "center",
-        justifyContent: "center",
-        backgroundColor: "#08131F",
-      }}
-    >
-      <ActivityIndicator color="#4DA3FF" />
-    </View>
-  );
+  return null;
 }
 
 export const unstable_settings = {
