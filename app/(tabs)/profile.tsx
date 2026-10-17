@@ -1,7 +1,7 @@
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { router } from "expo-router";
 import {
-  Alert,
+  ActivityIndicator,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -11,53 +11,30 @@ import {
 } from "react-native";
 
 import { ScreenContainer } from "@/components/screen-container";
-import { colors, SectionTitle } from "@/components/urbico-ui";
+import { UserAvatar } from "@/components/user-avatar";
+import { colors, PrimaryButton, SectionTitle } from "@/components/urbico-ui";
 import { confirmAsync } from "@/lib/confirm";
 import { useUrbico } from "@/lib/urbico-context";
-import { enableTravelNotifications } from "@/lib/notifications";
 import { useAuth } from "@/hooks/use-auth";
 
 export default function ProfileScreen() {
-  const {
-    notificationsEnabled,
-    setNotificationsEnabled,
-    voiceEnabled,
-    setVoiceEnabled,
-  } = useUrbico();
-  const { user, isAuthenticated, logout } = useAuth();
+  const { notificationsEnabled, voiceEnabled, setVoiceEnabled } = useUrbico();
+  const { user, loading, error, isAuthenticated, logout, refresh } = useAuth();
   const isAdmin = isAuthenticated && user?.role === "admin";
 
-  const changeNotificationPreference = async (enabled: boolean) => {
-    if (!enabled) {
-      setNotificationsEnabled(false);
-      return;
-    }
-    const granted = await enableTravelNotifications();
-    setNotificationsEnabled(granted);
-    if (!granted)
-      Alert.alert(
-        "Permissão necessária",
-        "Autorize notificações nas configurações do dispositivo para receber alertas da viagem.",
-      );
-  };
   // FIX (auditoria — mesma causa raiz do botão "limpar conversa" do
   // Norby): Alert.alert com Cancelar/Sair não mostra diálogo na Web, então
   // "Sair" nunca era de fato confirmado ali. Trocado por confirmAsync.
-  const handleAccountPress = async () => {
-    if (isAuthenticated) {
-      const confirmed = await confirmAsync(
-        "Sair da conta",
-        "Tem certeza que deseja sair?",
-        "Sair",
-        true,
-      );
-      if (confirmed) {
-        await logout();
-        router.replace("/login");
-      }
-    } else {
-      router.replace("/login");
-    }
+  // Modo visitante: terminar a sessão NÃO leva mais para a tela de login — a
+  // pessoa continua no app como visitante.
+  const handleLogout = async () => {
+    const confirmed = await confirmAsync(
+      "Sair da conta",
+      "Tem certeza que deseja sair? Seus dados continuam salvos na sua conta.",
+      "Sair",
+      true,
+    );
+    if (confirmed) await logout();
   };
 
   // FIX: removida a seção "Integrações" (Google Agenda) do Perfil, a pedido
@@ -74,40 +51,69 @@ export default function ProfileScreen() {
       >
         <View style={styles.top}>
           <Text style={styles.title}>Perfil</Text>
-          <MaterialIcons name="settings" size={22} color={colors.text} />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Abrir configurações de privacidade"
+            hitSlop={10}
+            onPress={() => router.push("/settings")}
+          >
+            <MaterialIcons name="settings" size={22} color={colors.text} />
+          </Pressable>
         </View>
-        <Pressable
-          onPress={() => void handleAccountPress()}
-          style={({ pressed }) => [styles.account, pressed && styles.pressed]}
-        >
-          <View style={styles.avatar}>
-            <MaterialIcons name="person" size={38} color={colors.cyan} />
+
+        {/* Quatro estados: carregando, autenticado, erro ao verificar a sessão e visitante. */}
+        {loading ? (
+          <View style={styles.account} accessibilityLabel="Carregando perfil">
+            <ActivityIndicator color={colors.blue} />
+            <Text style={styles.accountEmail}>Verificando sua sessão…</Text>
           </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.accountName}>
-              {isAuthenticated ? (user?.name ?? "Sua conta") : "Fazer login"}
-            </Text>
-            <Text style={styles.accountEmail}>
-              {isAuthenticated
-                ? (user?.email ?? "Personalize suas preferências")
-                : "Entre para sincronizar seus dados"}
-            </Text>
-            {isAuthenticated ? (
+        ) : isAuthenticated ? (
+          <View style={styles.account}>
+            <UserAvatar
+              uri={user?.avatarUrl}
+              name={user?.name}
+              email={user?.email}
+            />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.accountName}>{user?.name ?? "Sua conta"}</Text>
+              <Text style={styles.accountEmail}>
+                {user?.email ?? "Conta Urbico"}
+              </Text>
               <View style={styles.plan}>
                 <Text style={styles.planText}>Plano Free</Text>
               </View>
-            ) : null}
+            </View>
           </View>
-          {isAuthenticated ? (
-            <MaterialIcons name="logout" size={20} color={colors.muted} />
-          ) : (
-            <MaterialIcons
-              name="chevron-right"
-              size={21}
-              color={colors.muted}
+        ) : (
+          <View>
+            <View style={styles.account}>
+              <UserAvatar size={70} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.accountName}>Você está como visitante</Text>
+                <Text style={styles.accountEmail}>
+                  {error
+                    ? "Não foi possível verificar sua sessão agora. Você pode continuar usando o app."
+                    : "Mapa, linhas, rotas e Norby funcionam sem conta. Entre para guardar seus dados na conta; por enquanto eles ficam só neste aparelho."}
+                </Text>
+              </View>
+            </View>
+            {error ? (
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => void refresh()}
+                style={({ pressed }) => [styles.retry, pressed && styles.pressed]}
+              >
+                <Text style={styles.retryText}>Tentar novamente</Text>
+              </Pressable>
+            ) : null}
+            <PrimaryButton
+              label="Entrar ou criar conta"
+              onPress={() => router.push("/login")}
+              style={styles.loginButton}
             />
-          )}
-        </Pressable>
+          </View>
+        )}
+
         <SectionTitle title="Preferências" />
         <View style={styles.list}>
           <ProfileItem
@@ -116,29 +122,18 @@ export default function ProfileScreen() {
             subtitle="Opções de deslocamento"
             onPress={() => router.push("/routes")}
           />
-          <View style={styles.switchItem}>
-            <View style={styles.itemIcon}>
-              <MaterialIcons
-                name="notifications"
-                size={21}
-                color={colors.text}
-              />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.itemTitle}>Notificações</Text>
-              <Text style={styles.itemSubtitle}>
-                {notificationsEnabled ? "Ativadas" : "Desativadas"}
-              </Text>
-            </View>
-            <Switch
-              value={notificationsEnabled}
-              onValueChange={(value) =>
-                void changeNotificationPreference(value)
-              }
-              trackColor={{ false: "#33485C", true: colors.blue }}
-              thumbColor="#FFFFFF"
-            />
-          </View>
+          <ProfileItem
+            icon="notifications"
+            title="Notificações"
+            subtitle={
+              notificationsEnabled
+                ? "Ativadas · escolha o que receber"
+                : "Desativadas"
+            }
+            // Rota nova (app/notifications.tsx): o cast evita erro de tipo
+            // enquanto os tipos de rota do Expo Router não são regenerados.
+            onPress={() => router.push("/notifications" as never)}
+          />
           <View style={styles.switchItem}>
             <View style={styles.itemIcon}>
               <MaterialIcons name="mic" size={21} color={colors.text} />
@@ -150,6 +145,7 @@ export default function ProfileScreen() {
               </Text>
             </View>
             <Switch
+              accessibilityLabel="Voz do Norby"
               value={voiceEnabled}
               onValueChange={setVoiceEnabled}
               trackColor={{ false: "#33485C", true: colors.blue }}
@@ -206,6 +202,19 @@ export default function ProfileScreen() {
             </View>
           </>
         ) : null}
+        {isAuthenticated ? (
+          <>
+            <SectionTitle title="Conta" />
+            <View style={styles.list}>
+              <ProfileItem
+                icon="logout"
+                title="Sair da conta"
+                subtitle="Você continua usando o app como visitante"
+                onPress={() => void handleLogout()}
+              />
+            </View>
+          </>
+        ) : null}
       </ScrollView>
     </ScreenContainer>
   );
@@ -223,6 +232,7 @@ function ProfileItem({
 }) {
   return (
     <Pressable
+      accessibilityRole="button"
       onPress={onPress}
       style={({ pressed }) => [styles.item, pressed && styles.pressed]}
     >
@@ -251,18 +261,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 14,
   },
-  avatar: {
-    width: 70,
-    height: 70,
-    borderRadius: 35,
-    backgroundColor: colors.blueSoft,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: colors.blue,
-  },
   accountName: { color: colors.text, fontSize: 17, fontWeight: "700" },
-  accountEmail: { marginTop: 3, color: colors.muted, fontSize: 12 },
+  accountEmail: { marginTop: 3, color: colors.muted, fontSize: 12, lineHeight: 17 },
+  loginButton: { marginTop: 16 },
+  retry: { marginTop: 10, alignSelf: "flex-start", paddingVertical: 6 },
+  retryText: { color: colors.blue, fontSize: 13, fontWeight: "700" },
   plan: {
     marginTop: 8,
     alignSelf: "flex-start",
@@ -288,7 +291,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderColor: colors.border,
   },
-  itemDisabled: { opacity: 0.55 },
   switchItem: {
     minHeight: 67,
     paddingHorizontal: 14,
@@ -312,12 +314,6 @@ const styles = StyleSheet.create({
     color: colors.muted,
     fontSize: 10,
     lineHeight: 14,
-  },
-  connectedDot: {
-    width: 9,
-    height: 9,
-    borderRadius: 5,
-    backgroundColor: colors.green,
   },
   pressed: { opacity: 0.7, transform: [{ scale: 0.99 }] },
 });
