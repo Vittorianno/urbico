@@ -2,6 +2,16 @@ import { Platform } from "react-native";
 import { getApiBaseUrl } from "@/constants/oauth";
 import * as Auth from "./auth";
 
+/** Erro de resposta HTTP da API — carrega o status para distinguir sessão inválida (401/403) de falha de rede/servidor. */
+export class ApiError extends Error {
+  status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
 export async function apiCall<T>(
   endpoint: string,
   options: RequestInit = {},
@@ -45,8 +55,9 @@ export async function apiCall<T>(
       } catch {
         // Not JSON, use text as is
       }
-      throw new Error(
+      throw new ApiError(
         errorMessage || `API call failed: ${response.statusText}`,
+        response.status,
       );
     }
 
@@ -73,13 +84,17 @@ export async function logout(): Promise<void> {
   });
 }
 
-// Get current authenticated user (web uses cookie-based auth)
+// Get current authenticated user (web uses cookie-based auth).
+// Devolve null SOMENTE quando o servidor responde que não há sessão válida
+// (401/403). Falha de rede ou erro do servidor lança — quem chama não deve
+// tratar isso como "sessão inválida" nem apagar o token.
 export async function getMe(): Promise<{
   id: number;
   openId: string;
   name: string | null;
   email: string | null;
   loginMethod: string | null;
+  avatarUrl?: string | null;
   role?: "user" | "admin";
   lastSignedIn: string;
 } | null> {
@@ -87,8 +102,11 @@ export async function getMe(): Promise<{
     const result = await apiCall<{ user: any }>("/api/auth/me");
     return result.user || null;
   } catch (error) {
+    if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
+      return null;
+    }
     console.error("[API] getMe failed:", error);
-    return null;
+    throw error;
   }
 }
 

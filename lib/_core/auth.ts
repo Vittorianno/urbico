@@ -8,6 +8,9 @@ export type User = {
   name: string | null;
   email: string | null;
   loginMethod: string | null;
+  // URL https da foto de perfil do provedor de login (ex.: Google); null/ausente
+  // quando não há foto — a interface mostra o avatar com iniciais.
+  avatarUrl?: string | null;
   role?: "user" | "admin";
   lastSignedIn: Date;
 };
