@@ -56,6 +56,17 @@ const appointmentSyncSchema = z.object({
   googleEventId: z.string().max(255).optional(),
 });
 
+// Preferências de notificação por categoria — espelha
+// lib/notification-preferences.ts (duplicado de propósito, mesmo motivo dos
+// schemas acima: o bundle do servidor não importa código do cliente). Só
+// categorias que têm um evento real hoje existem aqui; ao criar uma nova
+// categoria, adicione nos dois lugares. Guardado dentro do mesmo payload JSON
+// de userDataSync (sem tabela nova), sempre por usuário autenticado.
+const notificationPreferencesSchema = z.object({
+  departureAlerts: z.boolean(),
+  tripUpdates: z.boolean(),
+});
+
 export const appRouter = router({
   // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
   system: systemRouter,
@@ -302,6 +313,8 @@ export const appRouter = router({
           appointments: z.infer<typeof appointmentSyncSchema>[];
           notificationsEnabled: boolean;
           voiceEnabled: boolean;
+          // Ausente em backups gravados antes das preferências por categoria.
+          notificationPreferences?: z.infer<typeof notificationPreferencesSchema>;
         };
       } catch {
         // Payload corrompido (não deveria acontecer, já que só nós
@@ -317,6 +330,7 @@ export const appRouter = router({
           appointments: z.array(appointmentSyncSchema).max(500),
           notificationsEnabled: z.boolean(),
           voiceEnabled: z.boolean(),
+          notificationPreferences: notificationPreferencesSchema.optional(),
         }),
       )
       .mutation(async ({ ctx, input }) => {
