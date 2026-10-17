@@ -16,6 +16,13 @@ export const users = mysqlTable("users", {
   name: text("name"),
   email: varchar("email", { length: 320 }),
   loginMethod: varchar("loginMethod", { length: 64 }),
+  /**
+   * URL https da foto de perfil devolvida pelo provedor de login (ex.: Google,
+   * via user_metadata do Supabase Auth). Só a URL é guardada — a imagem nunca é
+   * baixada nem copiada para o Urbico. Validada em server/_core/avatar.ts antes
+   * de gravar. Nula quando o provedor não fornece foto (o app mostra iniciais).
+   */
+  avatarUrl: varchar("avatarUrl", { length: 1024 }),
   // FIX (analytics): "creator" adicionado à frente de um futuro Urbico Admin
   // separado — o criador do projeto deve poder ter permissões acima de um
   // "admin" comum (ex.: gerenciar outros admins). Nada no app público usa
