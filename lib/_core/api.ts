@@ -24,7 +24,7 @@ export async function apiCall<T>(
   // Determine the auth method:
   // - Native platform: use stored session token as Bearer auth
   // - Web (including iframe): use cookie-based auth (browser handles automatically)
-  //   Cookie is set on backend domain via POST /api/auth/session after receiving token via postMessage
+  //   Cookie is set on backend domain via POST /api/auth/google/exchange after the Google login
   if (Platform.OS !== "web") {
     const sessionToken = await Auth.getSessionToken();
     if (sessionToken) {
@@ -110,33 +110,36 @@ export async function getMe(): Promise<{
   }
 }
 
-// Establish session cookie on the backend (3000-xxx domain)
-// Called after receiving a Supabase access token from app/login.tsx, to get
-// a proper Set-Cookie response from the backend and (on web) let the
-// browser store it.
-export async function establishSession(token: string): Promise<string | null> {
+// Login com Google (feito no servidor — ver server/_core/google-auth-routes.ts).
+// URL que o app abre (navegador no web, aba de autenticação no nativo) para
+// iniciar o login; `returnTo` é para onde o servidor devolve o usuário depois.
+export function getGoogleLoginStartUrl(returnTo: string): string {
+  const baseUrl = getApiBaseUrl();
+  const cleanBaseUrl = baseUrl.endsWith("/") ? baseUrl.slice(0, -1) : baseUrl;
+  return `${cleanBaseUrl}/api/auth/google/start?return_to=${encodeURIComponent(returnTo)}`;
+}
+
+// Troca o código de uso único devolvido pelo servidor (login_code) pela sessão
+// do Urbico: no web o servidor já grava o cookie; no nativo o app guarda o
+// token devolvido. Retorna o token da sessão ou null se o código for inválido.
+export async function exchangeGoogleLoginCode(code: string): Promise<string | null> {
   try {
     const baseUrl = getApiBaseUrl();
-    const url = `${baseUrl}/api/auth/session`;
-
-    const response = await fetch(url, {
+    const cleanBaseUrl = baseUrl.endsWith("/") ? baseUrl.slice(0, -1) : baseUrl;
+    const response = await fetch(`${cleanBaseUrl}/api/auth/google/exchange`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      credentials: "include", // Important: allows Set-Cookie to be stored
+      headers: { "Content-Type": "application/json" },
+      credentials: "include", // permite gravar o cookie de sessão no web
+      body: JSON.stringify({ code }),
     });
-
     if (!response.ok) {
-      console.error("[API] establishSession failed:", response.status);
+      console.error("[API] exchangeGoogleLoginCode failed:", response.status);
       return null;
     }
-
     const result = (await response.json()) as { app_session_id?: string };
     return result.app_session_id || null;
   } catch (error) {
-    console.error("[API] establishSession error:", error);
+    console.error("[API] exchangeGoogleLoginCode error:", error);
     return null;
   }
 }
