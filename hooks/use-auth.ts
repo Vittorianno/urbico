@@ -1,6 +1,8 @@
 import * as Api from "@/lib/_core/api";
 import * as Auth from "@/lib/_core/auth";
+import { isSupabaseConfigured, supabase } from "@/lib/_core/supabase";
 import { analytics } from "@/lib/analytics";
+import { emitSessionCleared } from "@/lib/session-events";
 import {
   createContext,
   createElement,
@@ -38,6 +40,7 @@ function apiUserToAuthUser(
     name: apiUser.name,
     email: apiUser.email,
     loginMethod: apiUser.loginMethod,
+    avatarUrl: apiUser.avatarUrl ?? null,
     role: apiUser.role,
     lastSignedIn: new Date(apiUser.lastSignedIn),
   };
@@ -66,6 +69,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       const apiUser = await Api.getMe();
       if (!apiUser) {
+        // O servidor respondeu 401/403: a sessão realmente não vale mais.
         setUser(null);
         await Auth.removeSessionToken();
         await Auth.clearUserInfo();
@@ -77,6 +81,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await Auth.setUserInfo(nextUser);
       return nextUser;
     } catch (err) {
+      // Falha de rede/servidor NÃO apaga o token nem os dados locais: o app
+      // segue utilizável como visitante e a sessão pode ser retomada com
+      // "tentar novamente" (refresh) quando a conexão voltar.
       const nextError =
         err instanceof Error ? err : new Error("Falha ao verificar a sessão");
       console.error("[useAuth] refresh error:", nextError);
@@ -97,8 +104,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       analytics.track("user_logout");
       await Auth.removeSessionToken();
       await Auth.clearUserInfo();
+      // Encerra também a sessão do Supabase guardada no aparelho (refresh
+      // token no AsyncStorage) — sem isso o "logout" deixaria a credencial.
+      if (isSupabaseConfigured) {
+        try {
+          await supabase.auth.signOut({ scope: "local" });
+        } catch (err) {
+          console.warn("[Auth] Falha ao encerrar a sessão do Supabase:", err);
+        }
+      }
       setUser(null);
       setError(null);
+      // Quem está dentro do UrbicoProvider limpa os dados pessoais locais.
+      emitSessionCleared();
     }
   }, []);
 
