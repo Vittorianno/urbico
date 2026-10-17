@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { analytics } from "@/lib/analytics";
 import { closestTo, distanceMeters } from "@/lib/leave-alert";
 import { speakNorby } from "@/lib/norby-voice";
+import { shouldNotify } from "@/lib/notification-preferences";
 import { scheduleTravelNotice } from "@/lib/notifications";
 import { watchUrbicoLocation, type LocationWatchHandle } from "@/lib/location-service";
 import { trpc } from "@/lib/trpc";
@@ -47,7 +48,7 @@ const BUS_SPEED_THRESHOLD_MS = 3.5;
 const NEAR_VEHICLE_METERS = 40;
 
 export function useTripNavigation() {
-  const { activeRoute, currentLocation, setCurrentLocation, addNorbyMessage, voiceEnabled, notificationsEnabled } = useUrbico();
+  const { activeRoute, currentLocation, setCurrentLocation, addNorbyMessage, voiceEnabled, notificationsEnabled, notificationPreferences } = useUrbico();
   const line = activeRoute?.line ?? null;
 
   const [phase, setPhase] = useState<NavigationPhase>("walking_to_stop");
@@ -95,8 +96,8 @@ export function useTripNavigation() {
     // FIX: enquanto a pessoa espera no ponto, a tela pode estar bloqueada ou
     // o app em segundo plano — mensagem no chat sozinha não chega até ela
     // nesse caso. Mesmo canal já usado pelo alerta de saída (scheduleTravelNotice),
-    // respeitando a preferência de notificações de viagem.
-    if (options.notify && notificationsEnabled) void scheduleTravelNotice("Norby", text);
+    // respeitando a chave geral e a categoria "avisos durante a viagem".
+    if (options.notify && shouldNotify({ notificationsEnabled, preferences: notificationPreferences }, "tripUpdates")) void scheduleTravelNotice("Norby", text);
   };
 
   const setPhaseTracked = (next: NavigationPhase) => {
