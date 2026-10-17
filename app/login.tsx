@@ -1,4 +1,5 @@
 import AntDesign from "@expo/vector-icons/AntDesign";
+import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { router } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
 import { useEffect, useRef, useState } from "react";
@@ -28,6 +29,10 @@ type Mode = "signIn" | "signUp";
 // funcionalidade que precise de conta só usa esta mesma sessão via
 // useAuth()/isAuthenticated). "Continuar com Google" é o método preferido;
 // e-mail/senha continua disponível como alternativa.
+//
+// Modo visitante: o login é opcional. O "X" no topo e "Continuar sem conta"
+// fecham esta tela sem autenticar (volta para onde a pessoa estava ou, se não
+// houver histórico, para o app).
 export default function LoginScreen() {
   const { refresh } = useAuth({ autoFetch: false });
   const completingSession = useRef<{
@@ -41,6 +46,11 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
 
   const isSignUp = mode === "signUp";
+
+  const closeLogin = () => {
+    if (router.canGoBack()) router.back();
+    else router.replace("/(tabs)");
+  };
 
   // Troca o access token do Supabase pela sessão própria do Urbico (cookie
   // no web, token no SecureStore no nativo) — mesmo passo final para
@@ -257,7 +267,15 @@ export default function LoginScreen() {
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
         <View style={styles.header}>
-          <View style={styles.back} />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Fechar e continuar sem conta"
+            onPress={closeLogin}
+            disabled={loading}
+            style={({ pressed }) => [styles.back, pressed && styles.pressed]}
+          >
+            <MaterialIcons name="close" size={24} color={colors.text} />
+          </Pressable>
           <Text style={styles.title}>
             {isSignUp ? "Criar conta" : "Entrar"}
           </Text>
@@ -336,6 +354,18 @@ export default function LoginScreen() {
               {isSignUp ? "Já tem conta? Entrar" : "Não tem conta? Criar uma"}
             </Text>
           </Pressable>
+
+          <Pressable
+            accessibilityRole="button"
+            onPress={closeLogin}
+            disabled={loading}
+            style={({ pressed }) => [
+              styles.switchMode,
+              pressed && styles.pressed,
+            ]}
+          >
+            <Text style={styles.guestText}>Continuar sem conta</Text>
+          </Pressable>
         </View>
       </KeyboardAvoidingView>
     </ScreenContainer>
@@ -406,5 +436,6 @@ const styles = StyleSheet.create({
   },
   switchMode: { marginTop: 18, alignItems: "center", paddingVertical: 8 },
   switchModeText: { color: colors.blue, fontSize: 13, fontWeight: "700" },
+  guestText: { color: colors.muted, fontSize: 13, fontWeight: "700" },
   pressed: { opacity: 0.7 },
 });
