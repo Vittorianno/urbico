@@ -11,6 +11,8 @@ function buildUserResponse(user: User) {
     name: user.name ?? null,
     email: user.email ?? null,
     loginMethod: user.loginMethod ?? null,
+    // URL https da foto do provedor de login (ou null → o app mostra iniciais).
+    avatarUrl: user.avatarUrl ?? null,
     lastSignedIn: (user.lastSignedIn ?? new Date()).toISOString(),
   };
 }

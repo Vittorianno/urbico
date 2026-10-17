@@ -5,6 +5,8 @@ import type { Request } from "express";
 import { SignJWT, jwtVerify } from "jose";
 import type { User } from "../../drizzle/schema";
 import * as db from "../db";
+import { saveUserAvatarUrl } from "../user-avatar";
+import { pickAvatarUrl } from "./avatar";
 import { ENV } from "./env";
 import { verifySupabaseAccessToken } from "./supabaseAuth";
 
@@ -116,6 +118,16 @@ class SDKServer {
       loginMethod: "supabase",
       lastSignedIn,
     });
+
+    // Foto de perfil: só a URL https validada que o provedor (ex.: Google) já
+    // informa em user_metadata — nunca baixada nem copiada. Se o provedor não
+    // informar foto, a coluna é limpa (o app mostra o avatar com iniciais).
+    // Uma falha aqui nunca pode impedir o login.
+    try {
+      await saveUserAvatarUrl(openId, pickAvatarUrl(supabaseUser.user_metadata));
+    } catch (error) {
+      console.warn("[Auth] Não foi possível gravar a foto de perfil:", String(error));
+    }
 
     const user = await db.getUserByOpenId(openId);
     if (!user) {

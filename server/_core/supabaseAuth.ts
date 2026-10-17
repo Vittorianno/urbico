@@ -5,7 +5,14 @@ import { ENV } from "./env";
 export type SupabaseUser = {
   id: string;
   email?: string | null;
-  user_metadata?: { full_name?: string | null; [key: string]: unknown };
+  user_metadata?: {
+    full_name?: string | null;
+    // Foto de perfil informada pelo provedor (Google envia `avatar_url` e
+    // `picture`). Sempre tratada como não confiável: ver server/_core/avatar.ts.
+    avatar_url?: unknown;
+    picture?: unknown;
+    [key: string]: unknown;
+  };
 };
 
 /**
