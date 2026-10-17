@@ -5,10 +5,7 @@ import type { Request } from "express";
 import { SignJWT, jwtVerify } from "jose";
 import type { User } from "../../drizzle/schema";
 import * as db from "../db";
-import { saveUserAvatarUrl } from "../user-avatar";
-import { pickAvatarUrl } from "./avatar";
 import { ENV } from "./env";
-import { verifySupabaseAccessToken } from "./supabaseAuth";
 
 const isNonEmptyString = (value: unknown): value is string =>
   typeof value === "string" && value.length > 0;
@@ -40,7 +37,8 @@ class SDKServer {
   /**
    * Assina o JWT de sessão próprio do Urbico (independente do provedor de
    * identidade). Mesmo formato/expiração usados desde sempre pelo resto do
-   * backend (cookie `app_session_id`, `sdk.verifySession`).
+   * backend (cookie `app_session_id`, `sdk.verifySession`). Quem cria a
+   * sessão após o login com Google é server/_core/google-auth-routes.ts.
    */
   async signSession(
     payload: SessionPayload,
@@ -83,59 +81,6 @@ class SDKServer {
       console.warn("[Auth] Session verification failed", String(error));
       return null;
     }
-  }
-
-  /**
-   * Troca um access token do Supabase Auth (obtido pelo app no
-   * signIn/signUp via @supabase/supabase-js) por uma sessão própria do
-   * Urbico. Valida o token contra o projeto Supabase, sincroniza o usuário
-   * local (drizzle/MySQL, mesma tabela `users` de sempre) e assina o JWT de
-   * sessão de longa duração que o resto do backend já sabe consumir.
-   *
-   * openId local passa a ser `supabase:<uuid>` — o `role` ("admin" para o
-   * dono do projeto) continua decidido por `db.upsertUser`/ENV.ownerOpenId
-   * sem nenhuma mudança.
-   */
-  async createSessionFromSupabaseToken(
-    supabaseAccessToken: string,
-  ): Promise<{ token: string; user: User }> {
-    const supabaseUser = await verifySupabaseAccessToken(supabaseAccessToken);
-    if (!supabaseUser) {
-      throw ForbiddenError("Token do Supabase inválido ou expirado");
-    }
-
-    const openId = `supabase:${supabaseUser.id}`;
-    const name =
-      (supabaseUser.user_metadata?.full_name as string | undefined) ||
-      supabaseUser.email?.split("@")[0] ||
-      "Usuário";
-    const lastSignedIn = new Date();
-
-    await db.upsertUser({
-      openId,
-      name,
-      email: supabaseUser.email ?? null,
-      loginMethod: "supabase",
-      lastSignedIn,
-    });
-
-    // Foto de perfil: só a URL https validada que o provedor (ex.: Google) já
-    // informa em user_metadata — nunca baixada nem copiada. Se o provedor não
-    // informar foto, a coluna é limpa (o app mostra o avatar com iniciais).
-    // Uma falha aqui nunca pode impedir o login.
-    try {
-      await saveUserAvatarUrl(openId, pickAvatarUrl(supabaseUser.user_metadata));
-    } catch (error) {
-      console.warn("[Auth] Não foi possível gravar a foto de perfil:", String(error));
-    }
-
-    const user = await db.getUserByOpenId(openId);
-    if (!user) {
-      throw ForbiddenError("Falha ao sincronizar usuário local após login");
-    }
-
-    const token = await this.signSession({ openId, appId: ENV.appId || "urbico", name });
-    return { token, user };
   }
 
   /**
