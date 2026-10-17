@@ -1,6 +1,13 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createContext, type ReactNode, useContext, useEffect, useMemo, useState } from "react";
 
+import {
+  DEFAULT_NOTIFICATION_PREFERENCES,
+  LOCAL_STATE_STORAGE_KEY,
+  normalizeNotificationPreferences,
+  type NotificationCategory,
+  type NotificationPreferences,
+} from "@/lib/notification-preferences";
 import { createTripRecord } from "@/lib/urbico-logic";
 
 export type CrowdLevel = "Vazio" | "Baixa" | "Normal" | "Alta" | "Lotado";
@@ -61,8 +68,8 @@ export type TripRecord = {
 
 // FIX (sincronização na nuvem — ver lib/cloud-sync.tsx): o que é enviado e
 // recebido do backup no servidor. Deliberadamente só o subconjunto que faz
-// sentido levar para outro aparelho: favoritos, agenda e as duas
-// preferências simples. Mensagens do Norby, histórico de viagem, contatos de
+// sentido levar para outro aparelho: favoritos, agenda e as preferências
+// simples. Mensagens do Norby, histórico de viagem, contatos de
 // confiança e localização/rota ativa continuam só locais — não fazem sentido
 // "restaurados" em outro aparelho/sessão.
 export type CloudSyncPayload = {
@@ -70,6 +77,8 @@ export type CloudSyncPayload = {
   appointments: Appointment[];
   notificationsEnabled: boolean;
   voiceEnabled: boolean;
+  // Ausente em backups antigos — nesse caso as preferências locais são mantidas.
+  notificationPreferences?: NotificationPreferences;
 };
 
 type UrbicoState = {
@@ -80,12 +89,16 @@ type UrbicoState = {
   tripHistory: TripRecord[];
   isTripActive: boolean;
   notificationsEnabled: boolean;
+  notificationPreferences: NotificationPreferences;
   voiceEnabled: boolean;
   activeRoute: ActiveRoute | null;
   currentLocation: CurrentLocation | null;
   locationSharingEnabled: boolean;
   trustedContacts: TrustedContact[];
   safeModeEnabled: boolean;
+  // true quando o estado salvo no aparelho já foi lido (evita limpar/mesclar
+  // dados antes da leitura terminar).
+  isReady: boolean;
   addFavorite: (favorite: Omit<Favorite, "id">) => void;
   // FIX: não existia forma de atualizar um favorito já criado — qualquer
   // "edição" na prática criava um registro novo via addFavorite, deixando o
@@ -103,6 +116,10 @@ type UrbicoState = {
   // Usado só por lib/cloud-sync.tsx, depois de mesclar o backup do servidor
   // com o que já existia localmente — nunca chamado diretamente por telas.
   hydrateFromCloud: (payload: CloudSyncPayload) => void;
+  // Usado só por lib/cloud-sync.tsx no logout / troca de conta: devolve os dados
+  // pessoais locais ao estado de fábrica. Não apaga nada no servidor e não
+  // mexe no monitoramento de alerta do aparelho (locationSharingEnabled).
+  resetPrivateData: () => void;
   sendMessage: (text: string) => void;
   addNorbyMessage: (text: string) => void;
   // FIX: botão "limpar conversa" do Norby — reseta só as mensagens do chat
@@ -113,6 +130,7 @@ type UrbicoState = {
   startTrip: () => void;
   endTrip: () => void;
   setNotificationsEnabled: (enabled: boolean) => void;
+  setNotificationPreference: (category: NotificationCategory, enabled: boolean) => void;
   setVoiceEnabled: (enabled: boolean) => void;
   setActiveRoute: (route: ActiveRoute | null) => void;
   setCurrentLocation: (location: CurrentLocation | null) => void;
@@ -122,7 +140,7 @@ type UrbicoState = {
   setSafeModeEnabled: (enabled: boolean) => void;
 };
 
-const STORAGE_KEY = "urbico.local-state.v1";
+const STORAGE_KEY = LOCAL_STATE_STORAGE_KEY;
 
 // FIX: gerador de id com contador monotônico para evitar colisões quando duas
 // mensagens (ex.: a pergunta do usuário e a resposta do Norby) são criadas no
@@ -146,19 +164,24 @@ function createInitialMessages(): ChatMessage[] {
   ];
 }
 
+function createDefaultFavorites(): Favorite[] {
+  return [
+    { id: "home", label: "Casa", address: "Defina seu endereço" },
+    { id: "work", label: "Trabalho", address: "Defina seu endereço" },
+  ];
+}
+
 const UrbicoContext = createContext<UrbicoState | undefined>(undefined);
 
 export function UrbicoProvider({ children }: { children: ReactNode }) {
-  const [favorites, setFavorites] = useState<Favorite[]>([
-    { id: "home", label: "Casa", address: "Defina seu endereço" },
-    { id: "work", label: "Trabalho", address: "Defina seu endereço" },
-  ]);
+  const [favorites, setFavorites] = useState<Favorite[]>(createDefaultFavorites);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>(createInitialMessages);
   const [crowdReports, setCrowdReports] = useState<CrowdLevel[]>([]);
   const [tripHistory, setTripHistory] = useState<TripRecord[]>([]);
   const [isTripActive, setIsTripActive] = useState(false);
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+  const [notificationPreferences, setNotificationPreferences] = useState<NotificationPreferences>({ ...DEFAULT_NOTIFICATION_PREFERENCES });
   const [voiceEnabled, setVoiceEnabled] = useState(true);
   const [activeRoute, setActiveRoute] = useState<ActiveRoute | null>(null);
   const [currentLocation, setCurrentLocation] = useState<CurrentLocation | null>(null);
@@ -171,7 +194,7 @@ export function UrbicoProvider({ children }: { children: ReactNode }) {
     AsyncStorage.getItem(STORAGE_KEY)
       .then((stored) => {
         if (!stored) return;
-        const parsed = JSON.parse(stored) as Partial<Omit<UrbicoState, "addFavorite" | "updateFavorite" | "removeFavorite" | "addAppointment" | "removeAppointment" | "setAppointmentGoogleEventId" | "hydrateFromCloud" | "sendMessage" | "addNorbyMessage" | "clearMessages" | "addCrowdReport" | "startTrip" | "endTrip" | "setNotificationsEnabled" | "setVoiceEnabled" | "setActiveRoute" | "setCurrentLocation" | "setLocationSharingEnabled" | "addTrustedContact" | "removeTrustedContact" | "setSafeModeEnabled">>;
+        const parsed = JSON.parse(stored) as Partial<Omit<UrbicoState, "addFavorite" | "updateFavorite" | "removeFavorite" | "addAppointment" | "removeAppointment" | "setAppointmentGoogleEventId" | "hydrateFromCloud" | "resetPrivateData" | "sendMessage" | "addNorbyMessage" | "clearMessages" | "addCrowdReport" | "startTrip" | "endTrip" | "setNotificationsEnabled" | "setNotificationPreference" | "setVoiceEnabled" | "setActiveRoute" | "setCurrentLocation" | "setLocationSharingEnabled" | "addTrustedContact" | "removeTrustedContact" | "setSafeModeEnabled" | "isReady">>;
         if (parsed.favorites) setFavorites(parsed.favorites);
         if (parsed.appointments) setAppointments(parsed.appointments);
         if (parsed.messages) {
@@ -192,6 +215,7 @@ export function UrbicoProvider({ children }: { children: ReactNode }) {
         if (parsed.tripHistory) setTripHistory(parsed.tripHistory);
         if (typeof parsed.isTripActive === "boolean") setIsTripActive(parsed.isTripActive);
         if (typeof parsed.notificationsEnabled === "boolean") setNotificationsEnabled(parsed.notificationsEnabled);
+        if (parsed.notificationPreferences) setNotificationPreferences(normalizeNotificationPreferences(parsed.notificationPreferences));
         if (typeof parsed.voiceEnabled === "boolean") setVoiceEnabled(parsed.voiceEnabled);
         if (parsed.activeRoute) setActiveRoute(parsed.activeRoute);
         if (parsed.currentLocation) setCurrentLocation(parsed.currentLocation);
@@ -207,9 +231,9 @@ export function UrbicoProvider({ children }: { children: ReactNode }) {
     if (!hydrated) return;
     AsyncStorage.setItem(
       STORAGE_KEY,
-      JSON.stringify({ favorites, appointments, messages, crowdReports, tripHistory, isTripActive, notificationsEnabled, voiceEnabled, activeRoute, currentLocation, locationSharingEnabled, trustedContacts, safeModeEnabled }),
+      JSON.stringify({ favorites, appointments, messages, crowdReports, tripHistory, isTripActive, notificationsEnabled, notificationPreferences, voiceEnabled, activeRoute, currentLocation, locationSharingEnabled, trustedContacts, safeModeEnabled }),
     ).catch(() => undefined);
-  }, [activeRoute, appointments, crowdReports, currentLocation, favorites, hydrated, isTripActive, locationSharingEnabled, messages, notificationsEnabled, safeModeEnabled, tripHistory, trustedContacts, voiceEnabled]);
+  }, [activeRoute, appointments, crowdReports, currentLocation, favorites, hydrated, isTripActive, locationSharingEnabled, messages, notificationPreferences, notificationsEnabled, safeModeEnabled, tripHistory, trustedContacts, voiceEnabled]);
 
   const value = useMemo<UrbicoState>(
     () => ({
@@ -220,12 +244,14 @@ export function UrbicoProvider({ children }: { children: ReactNode }) {
       tripHistory,
       isTripActive,
       notificationsEnabled,
+      notificationPreferences,
       voiceEnabled,
       activeRoute,
       currentLocation,
       locationSharingEnabled,
       trustedContacts,
       safeModeEnabled,
+      isReady: hydrated,
       addFavorite: (favorite) => setFavorites((current) => [...current, { ...favorite, id: `favorite-${Date.now()}` }]),
       updateFavorite: (id, patch) => setFavorites((current) => current.map((favorite) => (favorite.id === id ? { ...favorite, ...patch, id } : favorite))),
       removeFavorite: (id) => setFavorites((current) => current.filter((favorite) => favorite.id !== id)),
@@ -241,6 +267,22 @@ export function UrbicoProvider({ children }: { children: ReactNode }) {
         setAppointments(payload.appointments);
         setNotificationsEnabled(payload.notificationsEnabled);
         setVoiceEnabled(payload.voiceEnabled);
+        if (payload.notificationPreferences) setNotificationPreferences(normalizeNotificationPreferences(payload.notificationPreferences));
+      },
+      resetPrivateData: () => {
+        setFavorites(createDefaultFavorites());
+        setAppointments([]);
+        setMessages(createInitialMessages());
+        setCrowdReports([]);
+        setTripHistory([]);
+        setIsTripActive(false);
+        setNotificationsEnabled(true);
+        setNotificationPreferences({ ...DEFAULT_NOTIFICATION_PREFERENCES });
+        setVoiceEnabled(true);
+        setActiveRoute(null);
+        setCurrentLocation(null);
+        setTrustedContacts([]);
+        setSafeModeEnabled(false);
       },
       sendMessage: (text) => {
         const trimmed = text.trim();
@@ -263,6 +305,7 @@ export function UrbicoProvider({ children }: { children: ReactNode }) {
         setTripHistory((current) => [createTripRecord(new Date()), ...current]);
       },
       setNotificationsEnabled,
+      setNotificationPreference: (category, enabled) => setNotificationPreferences((current) => ({ ...current, [category]: enabled })),
       setVoiceEnabled,
       setActiveRoute,
       setCurrentLocation,
@@ -271,7 +314,7 @@ export function UrbicoProvider({ children }: { children: ReactNode }) {
       removeTrustedContact: (id) => setTrustedContacts((current) => current.filter((contact) => contact.id !== id)),
       setSafeModeEnabled,
     }),
-    [activeRoute, appointments, crowdReports, currentLocation, favorites, isTripActive, locationSharingEnabled, messages, notificationsEnabled, safeModeEnabled, tripHistory, trustedContacts, voiceEnabled],
+    [activeRoute, appointments, crowdReports, currentLocation, favorites, hydrated, isTripActive, locationSharingEnabled, messages, notificationPreferences, notificationsEnabled, safeModeEnabled, tripHistory, trustedContacts, voiceEnabled],
   );
 
   return <UrbicoContext.Provider value={value}>{children}</UrbicoContext.Provider>;
