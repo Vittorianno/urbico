@@ -5,6 +5,8 @@ import * as TaskManager from "expo-task-manager";
 import { Platform } from "react-native";
 
 import { getApiBaseUrl } from "@/constants/oauth";
+import { shouldNotify } from "@/lib/notification-preferences";
+import { readStoredNotificationSettings } from "@/lib/notification-settings-storage";
 import { scheduleTravelNotice } from "@/lib/notifications";
 
 const INSTALLATION_ID_KEY = "urbico.installation-id";
@@ -28,6 +30,12 @@ async function getConfiguration() {
 // sair" — então o alerta nunca chegava a notificar ninguém. Agora ela lê a
 // resposta, dispara uma notificação local na primeira vez que vir um
 // `alertedAt` novo, e encerra o monitoramento (o alerta já cumpriu seu papel).
+//
+// Preferências de notificação: a tarefa roda em segundo plano, sem acesso ao
+// estado do React, então lê as preferências direto do armazenamento local
+// (mesma fonte do UrbicoProvider). Se o usuário desligou a chave geral ou a
+// categoria "Hora de sair", o aviso não é exibido — mas o alerta é dado como
+// cumprido (marcado e monitoramento encerrado), em vez de insistir.
 async function postLocation(latitude: number, longitude: number) {
   const configuration = await getConfiguration();
   if (!configuration?.apiBaseUrl) return;
@@ -45,10 +53,13 @@ async function postLocation(latitude: number, longitude: number) {
     const lastNotified = await SecureStore.getItemAsync(LAST_NOTIFIED_KEY);
     if (lastNotified === result.alertedAt) return;
 
-    await scheduleTravelNotice(
-      "Hora de sair! 🚌",
-      result.appointmentLabel ? `Saia agora para chegar a tempo em: ${result.appointmentLabel}.` : "Saia agora para chegar a tempo no seu compromisso.",
-    );
+    const settings = await readStoredNotificationSettings();
+    if (shouldNotify(settings, "departureAlerts")) {
+      await scheduleTravelNotice(
+        "Hora de sair! 🚌",
+        result.appointmentLabel ? `Saia agora para chegar a tempo em: ${result.appointmentLabel}.` : "Saia agora para chegar a tempo no seu compromisso.",
+      );
+    }
     await SecureStore.setItemAsync(LAST_NOTIFIED_KEY, result.alertedAt);
     // O alerta já disparou; não há motivo para continuar consumindo bateria com
     // localização em segundo plano até o usuário armar um novo alerta.
