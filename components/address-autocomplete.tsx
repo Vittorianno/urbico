@@ -83,6 +83,9 @@ export function AddressAutocomplete({
           />
         </Pressable>
       </View>
+      <Text style={styles.coverageNote}>
+        Busca limitada à área atendida pela SPTrans — São Paulo, SP.
+      </Text>
 
       {enabled && suggestions.data?.length ? (
         <FlatList
@@ -164,6 +167,7 @@ const styles = StyleSheet.create({
   resultCopy: { flex: 1 },
   resultName: { color: colors.text, fontSize: 13, fontWeight: "700" },
   resultAddress: { color: colors.muted, fontSize: 11, marginTop: 2 },
+  coverageNote: { marginTop: 5, marginLeft: 3, color: colors.muted, fontSize: 10, lineHeight: 14 },
   hint: { marginTop: 6, color: colors.muted, fontSize: 11, lineHeight: 15 },
   pressed: { opacity: 0.72, transform: [{ scale: 0.98 }] },
 });
