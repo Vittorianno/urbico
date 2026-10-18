@@ -32,6 +32,7 @@ export default function ProfileScreen() {
   useEffect(() => {
     let active = true;
     if (!isAuthenticated || !isSupabaseConfigured) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setAvatarUrl(null);
       return () => { active = false; };
     }
