@@ -1,6 +1,6 @@
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { router } from "expo-router";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ComponentProps } from "react";
 import { Alert, FlatList, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from "expo-speech-recognition";
 
@@ -16,7 +16,7 @@ import { speakNorby, stopNorbyVoice } from "@/lib/norby-voice";
 import { trpc } from "@/lib/trpc";
 
 function NorbyIcon({ name, size = 22, color }: { name: string; size?: number; color: string }) {
-  return <MaterialIcons name={name as React.ComponentProps<typeof MaterialIcons>["name"]} size={size} color={color} />;
+  return <MaterialIcons name={name as ComponentProps<typeof MaterialIcons>["name"]} size={size} color={color} />;
 }
 
 const prompts = [
@@ -178,7 +178,7 @@ export default function NorbyScreen() {
                 ? `Consulta SPTrans atualizada: ${liveLineVehicles.data.length} veículo(s) retornados para a linha. Isso é uma contagem da consulta, não uma previsão de chegada.`
                 : "A consulta de veículos da SPTrans não está disponível neste momento; não afirmar localização ou chegada de ônibus."
               : "",
-          ].filter(Boolean).join("\\n")
+          ].filter(Boolean).join("\n")
         : undefined;
       const response = await chatMutation.mutateAsync({ message, transportContext });
       addNorbyMessage(response.message);
