@@ -21,7 +21,7 @@ export function getApiBaseUrl(): string {
     const { protocol, hostname, port } = window.location;
 
     // Padrão de sandbox em nuvem: 8081-sandboxid.region.domain -> 3000-sandboxid.region.domain
-    const sandboxApiHostname = hostname.replace(/^8081-/, "3000-");
+    const sandboxApiHostname = hostname.replace(/^8081-/, "3000-").replace(/-8081\./, "-3000.");
     if (sandboxApiHostname !== hostname) {
       return `${protocol}//${sandboxApiHostname}`;
     }
