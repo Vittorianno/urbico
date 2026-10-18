@@ -23,7 +23,7 @@ describe("open geospatial fallback", () => {
     delete process.env.PELIAS_BASE_URL;
     const fetchMock = vi.fn(async () => ({
       ok: true,
-      json: async () => [{ display_name: "Avenida Paulista, São Paulo - SP", lat: "-23.561", lon: "-46.656", name: "Avenida Paulista" }],
+      json: async () => [{ display_name: "Avenida Paulista, São Paulo - SP", lat: "-23.561", lon: "-46.656", name: "Avenida Paulista", address: { city: "São Paulo", country_code: "br" } }],
     }));
     vi.stubGlobal("fetch", fetchMock);
     await expect(suggestAddresses("Avenida Paulista")).resolves.toEqual([
@@ -38,8 +38,8 @@ describe("open geospatial fallback", () => {
     const fetchMock = vi.fn(async () => ({
       ok: true,
       json: async () => [
-        { display_name: "Avenida Paulista, São Paulo - SP", lat: "-23.561", lon: "-46.656", name: "Avenida Paulista" },
-        { display_name: "Praça da Sé, Salvador - BA", lat: "-12.971", lon: "-38.501", name: "Praça da Sé" },
+        { display_name: "Avenida Paulista, São Paulo - SP", lat: "-23.561", lon: "-46.656", name: "Avenida Paulista", address: { city: "São Paulo", country_code: "br" } },
+        { display_name: "Praça da Sé, Salvador - BA", lat: "-12.971", lon: "-38.501", name: "Praça da Sé", address: { city: "Salvador", country_code: "br" } },
       ],
     }));
     vi.stubGlobal("fetch", fetchMock);
