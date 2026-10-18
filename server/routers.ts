@@ -18,10 +18,16 @@ import {
 } from "./integrations/google-calendar";
 import * as db from "./db";
 
+// O cliente continua recebendo uma mensagem genérica (não vazamos detalhes de
+// integração), mas o MOTIVO REAL agora vai para o log do servidor — antes o
+// erro era engolido sem rastro, e uma chave errada ou um serviço fora do ar
+// ficavam impossíveis de diagnosticar. Só a mensagem do erro é registrada
+// (nunca o objeto inteiro, que poderia carregar URL com token).
 const safeIntegration = async <T>(operation: () => Promise<T>) => {
   try {
     return await operation();
-  } catch {
+  } catch (error) {
+    console.error("[integration] falha:", error instanceof Error ? error.message : "erro desconhecido");
     throw new Error("A integração está indisponível no momento. Tente novamente em instantes.");
   }
 };
