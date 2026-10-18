@@ -54,7 +54,7 @@ async function suggestAddressesViaPelias(query: string): Promise<GeocodedPlace[]
   const payload = (await response.json()) as PeliasResponse;
   return (payload.features ?? [])
     .map((feature) => mapPeliasFeature(feature, query))
-    .filter((place): place is GeocodedPlace => Boolean(place) && isWithinSptransSearchArea(place));
+    .filter((place): place is GeocodedPlace => place !== null && isWithinSptransSearchArea(place));
 }
 
 // FIX: sem um PELIAS_BASE_URL configurado (o normal, já que rodar um Pelias
