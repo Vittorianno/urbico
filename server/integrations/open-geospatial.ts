@@ -69,12 +69,10 @@ type NominatimResult = { display_name?: string; lat?: string; lon?: string; name
 
 async function suggestAddressesViaNominatim(query: string): Promise<GeocodedPlace[]> {
   const url = new URL("https://nominatim.openstreetmap.org/search");
-  url.searchParams.set("q", query);
+  url.searchParams.set("q", `${query}, São Paulo, SP, Brasil`);
   url.searchParams.set("format", "jsonv2");
   url.searchParams.set("addressdetails", "0");
   url.searchParams.set("countrycodes", "br");
-  url.searchParams.set("city", "São Paulo");
-  url.searchParams.set("state", "São Paulo");
   url.searchParams.set("viewbox", `${SPTRANS_SEARCH_BOUNDS.minLongitude},${SPTRANS_SEARCH_BOUNDS.maxLatitude},${SPTRANS_SEARCH_BOUNDS.maxLongitude},${SPTRANS_SEARCH_BOUNDS.minLatitude}`);
   url.searchParams.set("bounded", "1");
   url.searchParams.set("accept-language", "pt-BR");
