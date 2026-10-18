@@ -1,24 +1,24 @@
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { router } from "expo-router";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ComponentProps } from "react";
 import { Alert, FlatList, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from "expo-speech-recognition";
 
 import { ScreenContainer } from "@/components/screen-container";
 import { UrbicoMap } from "@/components/urbico-map";
+import { NorbyAvatar } from "@/components/norby-avatar";
 import { colors } from "@/components/urbico-ui";
 import { analytics } from "@/lib/analytics";
 import { confirmAsync } from "@/lib/confirm";
 import { useUrbico } from "@/lib/urbico-context";
 import { classifyNorbyIntent, parseCrowdLevelFromText } from "@/lib/urbico-logic";
+import { favoriteRouteParams, isFavoriteConfigured } from "@/lib/favorite-navigation";
 import { NORBY_UNSUPPORTED_INTENTS } from "@/lib/norby-intents";
 import { speakNorby, stopNorbyVoice } from "@/lib/norby-voice";
 import { trpc } from "@/lib/trpc";
 
-const iconGlyphs: Record<string, string> = { "arrow-back": "‹", "more-vert": "⋮", "smart-toy": "◉", "business-center": "▣", "directions-bus": "▣", "schedule": "◷", home: "⌂", "chevron-right": "›", mic: "◉", stop: "■", add: "+", send: "➤", "hourglass-top": "◷", "format-list-bulleted": "☷", "alt-route": "⌁", place: "●", "directions-walk": "●" };
-
 function NorbyIcon({ name, size = 22, color }: { name: string; size?: number; color: string }) {
-  return <Text style={{ color, fontSize: size, lineHeight: size + 3, fontWeight: "800" }}>{iconGlyphs[name] ?? "•"}</Text>;
+  return <MaterialIcons name={name as ComponentProps<typeof MaterialIcons>["name"]} size={size} color={color} />;
 }
 
 const prompts = [
@@ -28,22 +28,9 @@ const prompts = [
   { text: "Quero ir para casa", icon: "home" as const },
 ];
 
-function NorbyAvatar({ large = false }: { large?: boolean }) {
-  return (
-    <View style={[styles.avatarGlow, large && styles.avatarGlowLarge]}>
-      <View style={[styles.avatarShell, large && styles.avatarShellLarge]}>
-        <View style={[styles.avatarFace, large && styles.avatarFaceLarge]}>
-          <View style={styles.avatarEyes}><View style={styles.avatarEye} /><View style={styles.avatarEye} /></View>
-          <View style={styles.avatarSmile} />
-        </View>
-      </View>
-      <View style={styles.onlineDot} />
-    </View>
-  );
-}
 
 export default function NorbyScreen() {
-  const { messages, sendMessage, addNorbyMessage, clearMessages, addCrowdReport, voiceEnabled, activeRoute, startTrip } = useUrbico();
+  const { messages, sendMessage, addNorbyMessage, clearMessages, addCrowdReport, voiceEnabled, activeRoute, startTrip, favorites } = useUrbico();
   const [draft, setDraft] = useState("");
   const [isListening, setIsListening] = useState(false);
   const [showConversation, setShowConversation] = useState(true);
@@ -53,6 +40,11 @@ export default function NorbyScreen() {
   const listeningRef = useRef(false);
   const chatMutation = trpc.norby.chat.useMutation();
   const crowdSubmitMutation = trpc.crowdReports.submit.useMutation();
+  const activeLineId = activeRoute?.line?.id;
+  const liveLineVehicles = trpc.transit.lineVehicles.useQuery(
+    { lineId: activeLineId ?? 0 },
+    { enabled: typeof activeLineId === "number", refetchInterval: 30_000, staleTime: 10_000 },
+  );
 
   // FIX (analytics): norby_opened uma vez por montagem da tela — ver
   // docs/analytics.md.
@@ -131,6 +123,75 @@ export default function NorbyScreen() {
       awaitingCrowdRef.current = false;
     }
 
+    // O Norby também executa navegação para as telas que consultam os dados
+    // reais. Assim, pedidos de ônibus/rotas não ficam presos numa resposta
+    // genérica do modelo nem simulam previsões que não foram consultadas.
+    if (classification.intent === "next_bus" || classification.intent === "bus_schedule") {
+      const reply = "Vou abrir a consulta de ônibus para você verificar as linhas e os dados disponíveis da SPTrans.";
+      addNorbyMessage(reply);
+      if (voiceEnabled) void speakNorby(reply);
+      trackCommand("success");
+      router.push("/next-buses");
+      return;
+    }
+
+    if (classification.intent === "bus_location") {
+      if (activeRoute?.line && liveLineVehicles.isSuccess) {
+        const count = liveLineVehicles.data.length;
+        const reply = count > 0
+          ? `A SPTrans retornou ${count} veículo(s) para a linha ${activeRoute.line.label}. Vou abrir o mapa para você visualizar as posições recebidas. Isso não é uma previsão de chegada.`
+          : `A consulta atual da SPTrans não retornou veículos para a linha ${activeRoute.line.label}. Vou abrir a consulta de ônibus para você conferir os dados disponíveis.`;
+        addNorbyMessage(reply);
+        if (voiceEnabled) void speakNorby(reply);
+        trackCommand("success");
+        router.push(count > 0 ? "/(tabs)/map" : "/next-buses");
+      } else {
+        const reply = "Para localizar ônibus reais, preciso de uma linha selecionada e de uma resposta válida da SPTrans. Vou abrir a consulta para você escolher uma linha.";
+        addNorbyMessage(reply);
+        if (voiceEnabled) void speakNorby(reply);
+        trackCommand("success");
+        router.push("/next-buses");
+      }
+      return;
+    }
+
+    if (classification.intent === "route_search" || classification.intent === "destination_search") {
+      const favorite = classification.context === "home"
+        ? favorites.find((item) => item.id === "home" || item.label.toLowerCase() === "casa")
+        : classification.context === "work"
+          ? favorites.find((item) => item.id === "work" || item.label.toLowerCase() === "trabalho")
+          : classification.context === "favorite"
+            ? favorites.find(isFavoriteConfigured)
+            : undefined;
+      const configuredFavorite = favorite && isFavoriteConfigured(favorite) ? favorite : undefined;
+      const reply = configuredFavorite
+        ? `Vou preparar uma rota até ${configuredFavorite.label} usando o local que você salvou.`
+        : "Vou abrir o planejador de rotas para você informar a origem e o destino e consultar as opções disponíveis.";
+      addNorbyMessage(reply);
+      if (voiceEnabled) void speakNorby(reply);
+      trackCommand("success");
+      router.push(configuredFavorite ? favoriteRouteParams(configuredFavorite) : "/routes");
+      return;
+    }
+
+    if (classification.intent === "map") {
+      const reply = "Abrindo o mapa do Urbico. As posições de ônibus dependem de uma linha selecionada e de dados atuais da SPTrans.";
+      addNorbyMessage(reply);
+      if (voiceEnabled) void speakNorby(reply);
+      trackCommand("success");
+      router.push("/(tabs)/map");
+      return;
+    }
+
+    if (classification.intent === "calendar") {
+      const reply = "Vou abrir sua agenda para você consultar ou organizar compromissos.";
+      addNorbyMessage(reply);
+      if (voiceEnabled) void speakNorby(reply);
+      trackCommand("success");
+      router.push("/agenda");
+      return;
+    }
+
     // FIX: "avise quando o ônibus estiver chegando" deixou de ser uma
     // intenção sem funcionalidade real — lib/trip-navigation.ts agora
     // acompanha a posição real do veículo (SPTrans) enquanto você espera no
@@ -161,7 +222,23 @@ export default function NorbyScreen() {
     }
 
     try {
-      const response = await chatMutation.mutateAsync({ message });
+      const transportContext = activeRoute
+        ? [
+            "Contexto de viagem ativo no Urbico:",
+            `Origem: ${activeRoute.origin.address}.`,
+            `Destino: ${activeRoute.destination.address}.`,
+            `Rota a pé calculada: ${(activeRoute.distanceMeters / 1000).toFixed(1)} km, aproximadamente ${Math.max(1, Math.ceil(activeRoute.durationSeconds / 60))} minutos.`,
+            activeRoute.line
+              ? `Linha SPTrans selecionada: ${activeRoute.line.label}, sentido ${activeRoute.line.destination}, origem operacional ${activeRoute.line.origin}.`
+              : "Nenhuma linha de ônibus foi selecionada para esta viagem.",
+            activeRoute.line
+              ? liveLineVehicles.isSuccess
+                ? `Consulta SPTrans atualizada: ${liveLineVehicles.data.length} veículo(s) retornados para a linha. Isso é uma contagem da consulta, não uma previsão de chegada.`
+                : "A consulta de veículos da SPTrans não está disponível neste momento; não afirmar localização ou chegada de ônibus."
+              : "",
+          ].filter(Boolean).join("\n")
+        : undefined;
+      const response = await chatMutation.mutateAsync({ message, transportContext });
       addNorbyMessage(response.message);
       if (voiceEnabled) void speakNorby(response.message);
       trackCommand("success");

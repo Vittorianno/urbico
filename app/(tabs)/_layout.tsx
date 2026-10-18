@@ -2,13 +2,19 @@ import { Tabs } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { HapticTab } from "@/components/haptic-tab";
-import { Platform, Text, type TextStyle } from "react-native";
+import { Platform } from "react-native";
+import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { colors } from "@/components/urbico-ui";
 
-const tabGlyphs = { home: "⌂", map: "▣", norby: "◉", profile: "●" } as const;
+const tabIcons = {
+  home: "home",
+  map: "map",
+  norby: "smart-toy",
+  profile: "account-circle",
+} as const;
 
-function TabIcon({ name, color }: { name: keyof typeof tabGlyphs; color: TextStyle["color"] }) {
-  return <Text style={{ color, fontSize: name === "norby" ? 22 : 24, lineHeight: 27, fontWeight: "800" }}>{tabGlyphs[name]}</Text>;
+function TabIcon({ name, color }: { name: keyof typeof tabIcons; color: string }) {
+  return <MaterialIcons name={tabIcons[name]} size={name === "norby" ? 25 : 24} color={color} />;
 }
 
 export default function TabLayout() {

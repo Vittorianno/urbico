@@ -23,7 +23,7 @@ describe("open geospatial fallback", () => {
     delete process.env.PELIAS_BASE_URL;
     const fetchMock = vi.fn(async () => ({
       ok: true,
-      json: async () => [{ display_name: "Avenida Paulista, São Paulo - SP", lat: "-23.561", lon: "-46.656", name: "Avenida Paulista" }],
+      json: async () => [{ display_name: "Avenida Paulista, São Paulo - SP", lat: "-23.561", lon: "-46.656", name: "Avenida Paulista", address: { city: "São Paulo", country_code: "br" } }],
     }));
     vi.stubGlobal("fetch", fetchMock);
     await expect(suggestAddresses("Avenida Paulista")).resolves.toEqual([
@@ -31,6 +31,21 @@ describe("open geospatial fallback", () => {
     ]);
     const calledUrl = String((fetchMock.mock.calls[0] as unknown[] | undefined)?.[0]);
     expect(calledUrl).toContain("nominatim.openstreetmap.org");
+  });
+
+  it("filters address suggestions outside the SPTrans service area", async () => {
+    delete process.env.PELIAS_BASE_URL;
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => [
+        { display_name: "Avenida Paulista, São Paulo - SP", lat: "-23.561", lon: "-46.656", name: "Avenida Paulista", address: { city: "São Paulo", country_code: "br" } },
+        { display_name: "Praça da Sé, Salvador - BA", lat: "-12.971", lon: "-38.501", name: "Praça da Sé", address: { city: "Salvador", country_code: "br" } },
+      ],
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    const results = await suggestAddresses("praça");
+    expect(results).toHaveLength(1);
+    expect(results[0]?.name).toBe("Avenida Paulista");
   });
 
   // FIX: mesma lógica para a rota a pé — sem Valhalla agora cai para o

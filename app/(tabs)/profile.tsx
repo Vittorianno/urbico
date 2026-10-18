@@ -2,6 +2,7 @@ import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { router } from "expo-router";
 import {
   Alert,
+  Image,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -9,6 +10,7 @@ import {
   Text,
   View,
 } from "react-native";
+import { useEffect, useState } from "react";
 
 import { ScreenContainer } from "@/components/screen-container";
 import { colors, SectionTitle } from "@/components/urbico-ui";
@@ -16,6 +18,7 @@ import { confirmAsync } from "@/lib/confirm";
 import { useUrbico } from "@/lib/urbico-context";
 import { enableTravelNotifications } from "@/lib/notifications";
 import { useAuth } from "@/hooks/use-auth";
+import { isSupabaseConfigured, supabase } from "@/lib/_core/supabase";
 
 export default function ProfileScreen() {
   const {
@@ -25,6 +28,24 @@ export default function ProfileScreen() {
     setVoiceEnabled,
   } = useUrbico();
   const { user, isAuthenticated, logout } = useAuth();
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  useEffect(() => {
+    let active = true;
+    if (!isAuthenticated || !isSupabaseConfigured) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setAvatarUrl(null);
+      return () => { active = false; };
+    }
+    void supabase.auth.getUser().then(({ data, error }) => {
+      if (!active || error) return;
+      const metadata = data.user?.user_metadata;
+      const candidate = metadata?.avatar_url ?? metadata?.picture;
+      setAvatarUrl(typeof candidate === "string" && candidate.length > 0 ? candidate : null);
+    }).catch(() => {
+      if (active) setAvatarUrl(null);
+    });
+    return () => { active = false; };
+  }, [isAuthenticated]);
   const isAdmin = isAuthenticated && user?.role === "admin";
 
   const changeNotificationPreference = async (enabled: boolean) => {
@@ -81,7 +102,11 @@ export default function ProfileScreen() {
           style={({ pressed }) => [styles.account, pressed && styles.pressed]}
         >
           <View style={styles.avatar}>
-            <MaterialIcons name="person" size={38} color={colors.cyan} />
+            {avatarUrl ? (
+              <Image source={{ uri: avatarUrl }} style={styles.avatarImage} />
+            ) : (
+              <MaterialIcons name="person" size={38} color={colors.cyan} />
+            )}
           </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.accountName}>
@@ -108,6 +133,15 @@ export default function ProfileScreen() {
             />
           )}
         </Pressable>
+        <SectionTitle title="Plano e recursos" />
+        <View style={styles.list}>
+          <ProfileItem
+            icon="workspace-premium"
+            title="Conheça o Urbico Premium"
+            subtitle="Consulte o estado real do plano e os próximos passos"
+            onPress={() => router.push("/premium")}
+          />
+        </View>
         <SectionTitle title="Preferências" />
         <View style={styles.list}>
           <ProfileItem
@@ -261,6 +295,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.blue,
   },
+  avatarImage: { width: "100%", height: "100%", borderRadius: 35 },
   accountName: { color: colors.text, fontSize: 17, fontWeight: "700" },
   accountEmail: { marginTop: 3, color: colors.muted, fontSize: 12 },
   plan: {

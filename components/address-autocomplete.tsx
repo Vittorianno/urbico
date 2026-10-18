@@ -1,4 +1,5 @@
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import { useEffect, useState } from "react";
 import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { colors } from "@/components/urbico-ui";
@@ -28,9 +29,14 @@ export function AddressAutocomplete({
   onSubmit,
   compact = false,
 }: AddressAutocompleteProps) {
-  const enabled = value.trim().length >= 3;
+  const [debouncedValue, setDebouncedValue] = useState(value.trim());
+  useEffect(() => {
+    const timeout = setTimeout(() => setDebouncedValue(value.trim()), 900);
+    return () => clearTimeout(timeout);
+  }, [value]);
+  const enabled = debouncedValue.length >= 3;
   const suggestions = trpc.routing.suggestAddresses.useQuery(
-    { query: value.trim() },
+    { query: debouncedValue },
     { enabled, staleTime: 30_000 },
   );
 
@@ -83,6 +89,9 @@ export function AddressAutocomplete({
           />
         </Pressable>
       </View>
+      <Text style={styles.coverageNote}>
+        Busca limitada à área atendida pela SPTrans — São Paulo, SP.
+      </Text>
 
       {enabled && suggestions.data?.length ? (
         <FlatList
@@ -164,6 +173,7 @@ const styles = StyleSheet.create({
   resultCopy: { flex: 1 },
   resultName: { color: colors.text, fontSize: 13, fontWeight: "700" },
   resultAddress: { color: colors.muted, fontSize: 11, marginTop: 2 },
+  coverageNote: { marginTop: 5, marginLeft: 3, color: colors.muted, fontSize: 10, lineHeight: 14 },
   hint: { marginTop: 6, color: colors.muted, fontSize: 11, lineHeight: 15 },
   pressed: { opacity: 0.72, transform: [{ scale: 0.98 }] },
 });

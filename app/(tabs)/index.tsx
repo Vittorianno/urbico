@@ -56,7 +56,7 @@ export default function HomeScreen() {
         ) : null}
 
         <View style={styles.greeting}>
-          <Text style={styles.greetingTitle}>Olá! <Text style={styles.wave}>●</Text></Text>
+          <Text style={styles.greetingTitle}>Olá! <Text style={styles.wave}>👋</Text></Text>
           <Text style={styles.greetingText}>Para onde vamos hoje?</Text>
         </View>
 
