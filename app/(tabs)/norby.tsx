@@ -6,6 +6,7 @@ import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from "expo-spe
 
 import { ScreenContainer } from "@/components/screen-container";
 import { UrbicoMap } from "@/components/urbico-map";
+import { NorbyAvatar } from "@/components/norby-avatar";
 import { colors } from "@/components/urbico-ui";
 import { analytics } from "@/lib/analytics";
 import { confirmAsync } from "@/lib/confirm";
@@ -27,19 +28,6 @@ const prompts = [
   { text: "Quero ir para casa", icon: "home" as const },
 ];
 
-function NorbyAvatar({ large = false }: { large?: boolean }) {
-  return (
-    <View style={[styles.avatarGlow, large && styles.avatarGlowLarge]}>
-      <View style={[styles.avatarShell, large && styles.avatarShellLarge]}>
-        <View style={[styles.avatarFace, large && styles.avatarFaceLarge]}>
-          <View style={styles.avatarEyes}><View style={styles.avatarEye} /><View style={styles.avatarEye} /></View>
-          <View style={styles.avatarSmile} />
-        </View>
-      </View>
-      <View style={styles.onlineDot} />
-    </View>
-  );
-}
 
 export default function NorbyScreen() {
   const { messages, sendMessage, addNorbyMessage, clearMessages, addCrowdReport, voiceEnabled, activeRoute, startTrip, favorites } = useUrbico();
