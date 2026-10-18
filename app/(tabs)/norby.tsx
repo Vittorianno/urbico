@@ -11,6 +11,7 @@ import { analytics } from "@/lib/analytics";
 import { confirmAsync } from "@/lib/confirm";
 import { useUrbico } from "@/lib/urbico-context";
 import { classifyNorbyIntent, parseCrowdLevelFromText } from "@/lib/urbico-logic";
+import { favoriteRouteParams, isFavoriteConfigured } from "@/lib/favorite-navigation";
 import { NORBY_UNSUPPORTED_INTENTS } from "@/lib/norby-intents";
 import { speakNorby, stopNorbyVoice } from "@/lib/norby-voice";
 import { trpc } from "@/lib/trpc";
@@ -41,7 +42,7 @@ function NorbyAvatar({ large = false }: { large?: boolean }) {
 }
 
 export default function NorbyScreen() {
-  const { messages, sendMessage, addNorbyMessage, clearMessages, addCrowdReport, voiceEnabled, activeRoute, startTrip } = useUrbico();
+  const { messages, sendMessage, addNorbyMessage, clearMessages, addCrowdReport, voiceEnabled, activeRoute, startTrip, favorites } = useUrbico();
   const [draft, setDraft] = useState("");
   const [isListening, setIsListening] = useState(false);
   const [showConversation, setShowConversation] = useState(true);
@@ -167,11 +168,21 @@ export default function NorbyScreen() {
     }
 
     if (classification.intent === "route_search" || classification.intent === "destination_search") {
-      const reply = "Vou abrir o planejador de rotas para você informar a origem e o destino e consultar as opções disponíveis.";
+      const favorite = classification.context === "home"
+        ? favorites.find((item) => item.id === "home" || item.label.toLowerCase() === "casa")
+        : classification.context === "work"
+          ? favorites.find((item) => item.id === "work" || item.label.toLowerCase() === "trabalho")
+          : classification.context === "favorite"
+            ? favorites.find(isFavoriteConfigured)
+            : undefined;
+      const configuredFavorite = favorite && isFavoriteConfigured(favorite) ? favorite : undefined;
+      const reply = configuredFavorite
+        ? `Vou preparar uma rota até ${configuredFavorite.label} usando o local que você salvou.`
+        : "Vou abrir o planejador de rotas para você informar a origem e o destino e consultar as opções disponíveis.";
       addNorbyMessage(reply);
       if (voiceEnabled) void speakNorby(reply);
       trackCommand("success");
-      router.push("/routes");
+      router.push(configuredFavorite ? favoriteRouteParams(configuredFavorite) : "/routes");
       return;
     }
 
