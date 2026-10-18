@@ -7,7 +7,7 @@ function serviceUrl(variable: "PELIAS_BASE_URL" | "VALHALLA_BASE_URL") {
   return value ? value.replace(/\/$/, "") : null;
 }
 
-type PeliasFeature = { geometry?: { coordinates?: [number, number] }; properties?: { label?: string; name?: string } };
+type PeliasFeature = { geometry?: { coordinates?: [number, number] }; properties?: { label?: string; name?: string; locality?: string; localadmin?: string; county?: string } };
 type PeliasResponse = { features?: PeliasFeature[] };
 
 // A SPTrans Olho Vivo cobre o município de São Paulo, não todo o Brasil.
@@ -20,6 +20,10 @@ const SPTRANS_SEARCH_BOUNDS = {
   minLatitude: -23.735,
   maxLatitude: -23.356,
 };
+
+function normalizeLocality(value: string): string {
+  return value.toLowerCase().normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").trim();
+}
 
 function isWithinSptransSearchArea(place: GeocodedPlace): boolean {
   return place.longitude >= SPTRANS_SEARCH_BOUNDS.minLongitude
@@ -53,6 +57,10 @@ async function suggestAddressesViaPelias(query: string): Promise<GeocodedPlace[]
   if (!response.ok) throw new Error("A busca aberta de endereços não respondeu.");
   const payload = (await response.json()) as PeliasResponse;
   return (payload.features ?? [])
+    .filter((feature) => {
+      const locality = feature.properties?.locality ?? feature.properties?.localadmin ?? feature.properties?.county;
+      return !locality || normalizeLocality(locality) === "sao paulo";
+    })
     .map((feature) => mapPeliasFeature(feature, query))
     .filter((place): place is GeocodedPlace => place !== null && isWithinSptransSearchArea(place));
 }
@@ -65,13 +73,13 @@ async function suggestAddressesViaPelias(query: string): Promise<GeocodedPlace[]
 // como busca de endereço "de verdade" pronta para uso, sem exigir nenhuma
 // infraestrutura própria. Ele exige apenas um User-Agent identificando o app
 // (política de uso do Nominatim) e um limite de ~1 requisição por segundo.
-type NominatimResult = { display_name?: string; lat?: string; lon?: string; name?: string };
+type NominatimResult = { display_name?: string; lat?: string; lon?: string; name?: string; address?: { city?: string; municipality?: string; town?: string; country_code?: string } };
 
 async function suggestAddressesViaNominatim(query: string): Promise<GeocodedPlace[]> {
   const url = new URL("https://nominatim.openstreetmap.org/search");
   url.searchParams.set("q", `${query}, São Paulo, SP, Brasil`);
   url.searchParams.set("format", "jsonv2");
-  url.searchParams.set("addressdetails", "0");
+  url.searchParams.set("addressdetails", "1");
   url.searchParams.set("countrycodes", "br");
   url.searchParams.set("viewbox", `${SPTRANS_SEARCH_BOUNDS.minLongitude},${SPTRANS_SEARCH_BOUNDS.maxLatitude},${SPTRANS_SEARCH_BOUNDS.maxLongitude},${SPTRANS_SEARCH_BOUNDS.minLatitude}`);
   url.searchParams.set("bounded", "1");
@@ -84,10 +92,15 @@ async function suggestAddressesViaNominatim(query: string): Promise<GeocodedPlac
     .map((item) => {
       const latitude = Number(item.lat);
       const longitude = Number(item.lon);
+      const locality = item.address?.city ?? item.address?.municipality ?? item.address?.town;
+      // A caixa geográfica sozinha inclui municípios vizinhos. Exigimos que
+      // o resultado identifique São Paulo como município antes de o sugerir.
+      if (!locality || normalizeLocality(locality) !== "sao paulo") return null;
+      if (item.address?.country_code && item.address.country_code.toLowerCase() !== "br") return null;
       if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || !item.display_name) return null;
       return { name: item.name ?? item.display_name, address: item.display_name, latitude, longitude };
     })
-    .filter((place): place is GeocodedPlace => Boolean(place) && isWithinSptransSearchArea(place));
+    .filter((place): place is GeocodedPlace => place !== null && isWithinSptransSearchArea(place));
 }
 
 export async function suggestAddresses(query: string): Promise<GeocodedPlace[]> {
