@@ -1,4 +1,5 @@
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import { useEffect, useState } from "react";
 import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { colors } from "@/components/urbico-ui";
@@ -28,9 +29,14 @@ export function AddressAutocomplete({
   onSubmit,
   compact = false,
 }: AddressAutocompleteProps) {
-  const enabled = value.trim().length >= 3;
+  const [debouncedValue, setDebouncedValue] = useState(value.trim());
+  useEffect(() => {
+    const timeout = setTimeout(() => setDebouncedValue(value.trim()), 900);
+    return () => clearTimeout(timeout);
+  }, [value]);
+  const enabled = debouncedValue.length >= 3;
   const suggestions = trpc.routing.suggestAddresses.useQuery(
-    { query: value.trim() },
+    { query: debouncedValue },
     { enabled, staleTime: 30_000 },
   );
 
