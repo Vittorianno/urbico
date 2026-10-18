@@ -134,6 +134,65 @@ export default function NorbyScreen() {
       awaitingCrowdRef.current = false;
     }
 
+    // O Norby também executa navegação para as telas que consultam os dados
+    // reais. Assim, pedidos de ônibus/rotas não ficam presos numa resposta
+    // genérica do modelo nem simulam previsões que não foram consultadas.
+    if (classification.intent === "next_bus" || classification.intent === "bus_schedule") {
+      const reply = "Vou abrir a consulta de ônibus para você verificar as linhas e os dados disponíveis da SPTrans.";
+      addNorbyMessage(reply);
+      if (voiceEnabled) void speakNorby(reply);
+      trackCommand("success");
+      router.push("/next-buses");
+      return;
+    }
+
+    if (classification.intent === "bus_location") {
+      if (activeRoute?.line && liveLineVehicles.isSuccess) {
+        const count = liveLineVehicles.data.length;
+        const reply = count > 0
+          ? `A SPTrans retornou ${count} veículo(s) para a linha ${activeRoute.line.label}. Vou abrir o mapa para você visualizar as posições recebidas. Isso não é uma previsão de chegada.`
+          : `A consulta atual da SPTrans não retornou veículos para a linha ${activeRoute.line.label}. Vou abrir a consulta de ônibus para você conferir os dados disponíveis.`;
+        addNorbyMessage(reply);
+        if (voiceEnabled) void speakNorby(reply);
+        trackCommand("success");
+        router.push(count > 0 ? "/(tabs)/map" : "/next-buses");
+      } else {
+        const reply = "Para localizar ônibus reais, preciso de uma linha selecionada e de uma resposta válida da SPTrans. Vou abrir a consulta para você escolher uma linha.";
+        addNorbyMessage(reply);
+        if (voiceEnabled) void speakNorby(reply);
+        trackCommand("success");
+        router.push("/next-buses");
+      }
+      return;
+    }
+
+    if (classification.intent === "route_search" || classification.intent === "destination_search") {
+      const reply = "Vou abrir o planejador de rotas para você informar a origem e o destino e consultar as opções disponíveis.";
+      addNorbyMessage(reply);
+      if (voiceEnabled) void speakNorby(reply);
+      trackCommand("success");
+      router.push("/routes");
+      return;
+    }
+
+    if (classification.intent === "map") {
+      const reply = "Abrindo o mapa do Urbico. As posições de ônibus dependem de uma linha selecionada e de dados atuais da SPTrans.";
+      addNorbyMessage(reply);
+      if (voiceEnabled) void speakNorby(reply);
+      trackCommand("success");
+      router.push("/(tabs)/map");
+      return;
+    }
+
+    if (classification.intent === "calendar") {
+      const reply = "Vou abrir sua agenda para você consultar ou organizar compromissos.";
+      addNorbyMessage(reply);
+      if (voiceEnabled) void speakNorby(reply);
+      trackCommand("success");
+      router.push("/agenda");
+      return;
+    }
+
     // FIX: "avise quando o ônibus estiver chegando" deixou de ser uma
     // intenção sem funcionalidade real — lib/trip-navigation.ts agora
     // acompanha a posição real do veículo (SPTrans) enquanto você espera no
