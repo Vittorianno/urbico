@@ -15,10 +15,8 @@ import { NORBY_UNSUPPORTED_INTENTS } from "@/lib/norby-intents";
 import { speakNorby, stopNorbyVoice } from "@/lib/norby-voice";
 import { trpc } from "@/lib/trpc";
 
-const iconGlyphs: Record<string, string> = { "arrow-back": "‹", "more-vert": "⋮", "smart-toy": "◉", "business-center": "▣", "directions-bus": "▣", "schedule": "◷", home: "⌂", "chevron-right": "›", mic: "◉", stop: "■", add: "+", send: "➤", "hourglass-top": "◷", "format-list-bulleted": "☷", "alt-route": "⌁", place: "●", "directions-walk": "●" };
-
 function NorbyIcon({ name, size = 22, color }: { name: string; size?: number; color: string }) {
-  return <Text style={{ color, fontSize: size, lineHeight: size + 3, fontWeight: "800" }}>{iconGlyphs[name] ?? "•"}</Text>;
+  return <MaterialIcons name={name as React.ComponentProps<typeof MaterialIcons>["name"]} size={size} color={color} />;
 }
 
 const prompts = [
@@ -53,6 +51,11 @@ export default function NorbyScreen() {
   const listeningRef = useRef(false);
   const chatMutation = trpc.norby.chat.useMutation();
   const crowdSubmitMutation = trpc.crowdReports.submit.useMutation();
+  const activeLineId = activeRoute?.line?.id;
+  const liveLineVehicles = trpc.transit.lineVehicles.useQuery(
+    { lineId: activeLineId ?? 0 },
+    { enabled: typeof activeLineId === "number", refetchInterval: 30_000, staleTime: 10_000 },
+  );
 
   // FIX (analytics): norby_opened uma vez por montagem da tela — ver
   // docs/analytics.md.
@@ -161,7 +164,23 @@ export default function NorbyScreen() {
     }
 
     try {
-      const response = await chatMutation.mutateAsync({ message });
+      const transportContext = activeRoute
+        ? [
+            "Contexto de viagem ativo no Urbico:",
+            `Origem: ${activeRoute.origin.address}.`,
+            `Destino: ${activeRoute.destination.address}.`,
+            `Rota a pé calculada: ${(activeRoute.distanceMeters / 1000).toFixed(1)} km, aproximadamente ${Math.max(1, Math.ceil(activeRoute.durationSeconds / 60))} minutos.`,
+            activeRoute.line
+              ? `Linha SPTrans selecionada: ${activeRoute.line.label}, sentido ${activeRoute.line.destination}, origem operacional ${activeRoute.line.origin}.`
+              : "Nenhuma linha de ônibus foi selecionada para esta viagem.",
+            activeRoute.line
+              ? liveLineVehicles.isSuccess
+                ? `Consulta SPTrans atualizada: ${liveLineVehicles.data.length} veículo(s) retornados para a linha. Isso é uma contagem da consulta, não uma previsão de chegada.`
+                : "A consulta de veículos da SPTrans não está disponível neste momento; não afirmar localização ou chegada de ônibus."
+              : "",
+          ].filter(Boolean).join("\\n")
+        : undefined;
+      const response = await chatMutation.mutateAsync({ message, transportContext });
       addNorbyMessage(response.message);
       if (voiceEnabled) void speakNorby(response.message);
       trackCommand("success");
