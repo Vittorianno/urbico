@@ -1,7 +1,7 @@
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
-import { Alert, FlatList, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { FlatList, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { AddressAutocomplete, type AddressSuggestion } from "@/components/address-autocomplete";
 import { CrowdLevelBadge } from "@/components/crowd-level";
@@ -29,6 +29,7 @@ export default function RoutesScreen() {
   const [selectedLine, setSelectedLine] = useState<{ id: number; label: string; origin: string; destination: string } | null>(null);
   const [locatingOrigin, setLocatingOrigin] = useState(false);
   const [originError, setOriginError] = useState<string | null>(null);
+  const [routeError, setRouteError] = useState<string | null>(null);
   const { setActiveRoute, startTrip, setCurrentLocation } = useUrbico();
   const ready = origin.trim().length > 1 && destination.trim().length > 1;
   const routeMutation = trpc.routing.planWalking.useMutation();
@@ -71,6 +72,7 @@ export default function RoutesScreen() {
 
   const start = async () => {
     if (!ready) return;
+    setRouteError(null);
     // FIX (analytics): route_search no momento em que a pessoa efetivamente
     // pede pra calcular a rota (não a cada tecla digitada) — ver
     // docs/analytics.md.
@@ -85,11 +87,10 @@ export default function RoutesScreen() {
         destinationLongitude: destinationPlace?.longitude,
       });
       if (!result?.route) {
-        Alert.alert(
-          "Rota automática indisponível",
-          routingStatus.data?.geocodingAvailable
-            ? "O serviço de rotas ainda não está configurado. Você pode continuar usando endereços e coordenadas manuais."
-            : "A busca automática de endereços está indisponível. Confirme os endereços manualmente ou configure um serviço Pelias/Valhalla.",
+        setRouteError(
+          routingStatus.data?.routingAvailable
+            ? "Não foi possível calcular esta rota agora. Confira os endereços e tente novamente."
+            : "O roteamento automático não está configurado. Tente novamente mais tarde ou use uma rota com coordenadas já salvas.",
         );
         return;
       }
@@ -104,8 +105,8 @@ export default function RoutesScreen() {
       startTrip();
       analytics.track("route_started", { hasLine: Boolean(selectedLine), distanceMeters: Math.round(result.route.distanceMeters) });
       router.push("/trip");
-    } catch {
-      return;
+    } catch (error) {
+      setRouteError(error instanceof Error ? error.message : "Não foi possível calcular a rota. Tente novamente.");
     }
   };
 
@@ -115,6 +116,7 @@ export default function RoutesScreen() {
         <View style={styles.top}><Pressable onPress={() => router.back()} style={({ pressed }) => [styles.back, pressed && styles.pressed]}><MaterialIcons name="arrow-back" size={22} color={colors.text} /></Pressable><Text style={styles.title}>Rotas</Text><MaterialIcons name="more-vert" size={23} color={colors.text} /></View>
         <View style={styles.form}><View style={styles.addressLabelRow}><Text style={styles.fieldLabel}>De</Text><AddressAutocomplete value={origin} onChangeText={(text) => { setOrigin(text); setOriginPlace(null); }} onSelect={(place) => { setOriginPlace(place); setOrigin(place.address); }} placeholder={locatingOrigin ? "Localizando..." : "Minha localização ou endereço"} compact /></View><View style={styles.divider} /><View style={styles.addressLabelRow}><Text style={styles.fieldLabel}>Para</Text><AddressAutocomplete value={destination} onChangeText={(text) => { setDestination(text); setDestinationPlace(null); }} onSelect={(place) => { setDestinationPlace(place); setDestination(place.address); }} onSubmit={() => void start()} placeholder="Digite um endereço" compact /></View><Pressable onPress={() => { const previousOrigin = origin; const previousDestination = destination; const previousOriginPlace = originPlace; setOrigin(previousDestination); setDestination(previousOrigin); setOriginPlace(destinationPlace); setDestinationPlace(previousOriginPlace); }} style={({ pressed }) => [styles.swap, pressed && styles.pressed]}><MaterialIcons name="swap-vert" size={19} color={colors.text} /></Pressable></View>
         {originError ? <Text style={styles.originError}>{originError} Informe a origem manualmente.</Text> : null}
+        {routeError ? <Text accessibilityRole="alert" style={styles.originError}>{routeError}</Text> : null}
         {lineSearch.data?.length ? <View style={styles.lineResults}><Text style={styles.resultLabel}>Linha para acompanhar no mapa</Text><FlatList data={lineSearch.data.slice(0, 3)} scrollEnabled={false} keyExtractor={(item) => String(item.id)} renderItem={({ item }) => <Pressable onPress={() => selectLine(item)} style={({ pressed }) => [styles.lineResult, selectedLine?.id === item.id && styles.lineSelected, pressed && styles.pressed]}><MaterialIcons name="directions-bus" size={18} color={colors.blue} /><View style={{ flex: 1 }}><Text style={styles.lineName}>{item.label} · {item.destination}</Text><Text style={styles.lineMeta}>{item.origin}</Text><View style={styles.lineCrowd}><CrowdLevelBadge level={crowdBatchQuery.data?.[item.id]?.level ?? null} compact /></View></View>{selectedLine?.id === item.id ? <MaterialIcons name="check-circle" size={19} color={colors.cyan} /> : null}</Pressable>} /></View> : null}
         <View style={styles.modeRow}><View style={styles.modeActive}><MaterialIcons name="directions-bus" size={20} color={colors.blue} /></View><View style={styles.mode}><MaterialIcons name="directions-car" size={20} color={colors.muted} /></View><View style={styles.mode}><MaterialIcons name="directions-walk" size={20} color={colors.muted} /></View></View>
         <SectionTitle title="Opções" />
