@@ -61,11 +61,50 @@ export default function HomeScreen() {
         </View>
 
         <Pressable onPress={() => router.push("/norby")} style={({ pressed }) => [styles.norbyButton, pressed && styles.pressed]}>
-          <View style={styles.norbyAvatar}><MaterialIcons name="smart-toy" size={25} color={colors.cyan} /></View>
-          <Text style={styles.norbyButtonText}>FALAR COM NORBY</Text>
-          <MaterialIcons name="mic" size={22} color="#FFFFFF" />
+          <View style={styles.norbyTopline}>
+            <View style={styles.norbyAvatar}>
+              <MaterialIcons name="smart-toy" size={27} color={colors.cyan} />
+            </View>
+            <View style={styles.norbyBadge}>
+              <View style={styles.norbyBadgeDot} />
+              <Text style={styles.norbyBadgeText}>ASSISTENTE DE MOBILIDADE</Text>
+            </View>
+            <View style={styles.norbyMic}>
+              <MaterialIcons name="graphic-eq" size={20} color={colors.cyan} />
+            </View>
+          </View>
+          <Text style={styles.norbyTitle}>Seu copiloto de mobilidade.</Text>
+          <Text style={styles.norbyDescription}>
+            Planeje seu caminho, tire dúvidas e converse por voz ou texto.
+          </Text>
+          <View style={styles.norbyAction}>
+            <Text style={styles.norbyButtonText}>Conversar com Norby</Text>
+            <MaterialIcons name="arrow-forward" size={18} color="#FFFFFF" />
+          </View>
         </Pressable>
-        <Text style={styles.speakHint}>Toque para falar ou escrever</Text>
+
+        <View style={styles.quickActions}>
+          <Pressable onPress={() => router.push("/map")} style={({ pressed }) => [styles.quickAction, pressed && styles.pressed]}>
+            <View style={styles.quickActionIcon}>
+              <MaterialIcons name="explore" size={21} color={colors.cyan} />
+            </View>
+            <View style={styles.quickActionCopy}>
+              <Text style={styles.quickActionTitle}>Explorar mapa</Text>
+              <Text style={styles.quickActionSubtitle}>Veja sua região</Text>
+            </View>
+            <MaterialIcons name="chevron-right" size={20} color={colors.muted} />
+          </Pressable>
+          <Pressable onPress={() => router.push("/routes")} style={({ pressed }) => [styles.quickAction, pressed && styles.pressed]}>
+            <View style={styles.quickActionIcon}>
+              <MaterialIcons name="alt-route" size={21} color={colors.cyan} />
+            </View>
+            <View style={styles.quickActionCopy}>
+              <Text style={styles.quickActionTitle}>Planejar rota</Text>
+              <Text style={styles.quickActionSubtitle}>Defina seu destino</Text>
+            </View>
+            <MaterialIcons name="chevron-right" size={20} color={colors.muted} />
+          </Pressable>
+        </View>
 
         <SectionTitle title="Próximos ônibus" action="Consultar linhas" onAction={() => router.push("/next-buses")} />
         <Pressable onPress={() => router.push("/next-buses")} style={({ pressed }) => pressed && styles.pressed}><InfoCard style={styles.transitState}>
@@ -119,10 +158,23 @@ const styles = StyleSheet.create({
   greetingTitle: { color: colors.text, fontSize: 23, lineHeight: 30, fontWeight: "700" },
   wave: { color: colors.amber, fontSize: 17 },
   greetingText: { marginTop: 2, color: colors.text, fontSize: 16, lineHeight: 23, fontWeight: "600" },
-  norbyButton: { minHeight: 56, marginTop: 18, paddingHorizontal: 10, borderRadius: 17, backgroundColor: colors.blue, flexDirection: "row", alignItems: "center", gap: 11, shadowColor: colors.blue, shadowOpacity: 0.3, shadowRadius: 12, elevation: 4 },
-  norbyAvatar: { width: 39, height: 39, borderRadius: 20, backgroundColor: "#0A1B31", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "#61D9FF" },
-  norbyButtonText: { flex: 1, color: "#FFFFFF", fontSize: 14, fontWeight: "800" },
-  speakHint: { marginTop: 7, color: colors.muted, fontSize: 11, textAlign: "center" },
+  norbyButton: { marginTop: 20, padding: 17, borderRadius: 22, backgroundColor: "#0B2035", borderWidth: 1, borderColor: "#17486A", shadowColor: colors.cyan, shadowOpacity: 0.16, shadowRadius: 18, elevation: 4 },
+  norbyTopline: { flexDirection: "row", alignItems: "center", gap: 10 },
+  norbyAvatar: { width: 46, height: 46, borderRadius: 15, backgroundColor: "#0A1B31", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "#3DBFEF" },
+  norbyBadge: { flex: 1, flexDirection: "row", alignItems: "center", gap: 6 },
+  norbyBadgeDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.cyan },
+  norbyBadgeText: { color: colors.cyan, fontSize: 9, fontWeight: "800", letterSpacing: 1 },
+  norbyMic: { width: 36, height: 36, borderRadius: 12, alignItems: "center", justifyContent: "center", backgroundColor: "#10304A", borderWidth: 1, borderColor: "#1D5375" },
+  norbyTitle: { marginTop: 15, color: colors.text, fontSize: 20, lineHeight: 26, fontWeight: "800", letterSpacing: -0.35 },
+  norbyDescription: { marginTop: 5, color: "#A9BED2", fontSize: 12, lineHeight: 18 },
+  norbyAction: { marginTop: 15, paddingTop: 12, borderTopWidth: 1, borderTopColor: "#1A3B54", flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  norbyButtonText: { color: "#FFFFFF", fontSize: 13, fontWeight: "800" },
+  quickActions: { flexDirection: "row", gap: 10, marginTop: 12 },
+  quickAction: { flex: 1, minHeight: 78, padding: 11, borderRadius: 16, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, flexDirection: "row", alignItems: "center", gap: 8 },
+  quickActionIcon: { width: 34, height: 34, borderRadius: 11, backgroundColor: colors.blueSoft, alignItems: "center", justifyContent: "center" },
+  quickActionCopy: { flex: 1 },
+  quickActionTitle: { color: colors.text, fontSize: 11, fontWeight: "800" },
+  quickActionSubtitle: { marginTop: 3, color: colors.muted, fontSize: 9, lineHeight: 13 },
   transitState: { minHeight: 102, flexDirection: "row", alignItems: "flex-start", gap: 12 },
   busIcon: { width: 42, height: 42, borderRadius: 12, backgroundColor: colors.blueSoft, alignItems: "center", justifyContent: "center" },
   cardTitle: { color: colors.text, fontSize: 15, fontWeight: "700" },
