@@ -10,6 +10,24 @@ function serviceUrl(variable: "PELIAS_BASE_URL" | "VALHALLA_BASE_URL") {
 type PeliasFeature = { geometry?: { coordinates?: [number, number] }; properties?: { label?: string; name?: string } };
 type PeliasResponse = { features?: PeliasFeature[] };
 
+// A SPTrans Olho Vivo cobre o município de São Paulo, não todo o Brasil.
+// Este retângulo é uma barreira geográfica conservadora para a busca: impede
+// resultados claramente fora da cidade; o geocoder também recebe filtros de
+// cidade/área para reduzir falsos positivos nos limites municipais.
+const SPTRANS_SEARCH_BOUNDS = {
+  minLongitude: -46.826,
+  maxLongitude: -46.365,
+  minLatitude: -23.735,
+  maxLatitude: -23.356,
+};
+
+function isWithinSptransSearchArea(place: GeocodedPlace): boolean {
+  return place.longitude >= SPTRANS_SEARCH_BOUNDS.minLongitude
+    && place.longitude <= SPTRANS_SEARCH_BOUNDS.maxLongitude
+    && place.latitude >= SPTRANS_SEARCH_BOUNDS.minLatitude
+    && place.latitude <= SPTRANS_SEARCH_BOUNDS.maxLatitude;
+}
+
 function mapPeliasFeature(feature: PeliasFeature, fallback: string): GeocodedPlace | null {
   const [longitude, latitude] = feature.geometry?.coordinates ?? [];
   if (typeof latitude !== "number" || typeof longitude !== "number") return null;
@@ -24,11 +42,19 @@ async function suggestAddressesViaPelias(query: string): Promise<GeocodedPlace[]
   url.searchParams.set("text", query);
   url.searchParams.set("lang", "pt-BR");
   url.searchParams.set("boundary.country", "BR");
+  url.searchParams.set("boundary.rect.min_lon", String(SPTRANS_SEARCH_BOUNDS.minLongitude));
+  url.searchParams.set("boundary.rect.max_lon", String(SPTRANS_SEARCH_BOUNDS.maxLongitude));
+  url.searchParams.set("boundary.rect.min_lat", String(SPTRANS_SEARCH_BOUNDS.minLatitude));
+  url.searchParams.set("boundary.rect.max_lat", String(SPTRANS_SEARCH_BOUNDS.maxLatitude));
+  url.searchParams.set("focus.point.lat", "-23.5505");
+  url.searchParams.set("focus.point.lon", "-46.6333");
   url.searchParams.set("size", "5");
   const response = await fetch(url);
   if (!response.ok) throw new Error("A busca aberta de endereços não respondeu.");
   const payload = (await response.json()) as PeliasResponse;
-  return (payload.features ?? []).map((feature) => mapPeliasFeature(feature, query)).filter((place): place is GeocodedPlace => Boolean(place));
+  return (payload.features ?? [])
+    .map((feature) => mapPeliasFeature(feature, query))
+    .filter((place): place is GeocodedPlace => Boolean(place) && isWithinSptransSearchArea(place));
 }
 
 // FIX: sem um PELIAS_BASE_URL configurado (o normal, já que rodar um Pelias
@@ -47,6 +73,10 @@ async function suggestAddressesViaNominatim(query: string): Promise<GeocodedPlac
   url.searchParams.set("format", "jsonv2");
   url.searchParams.set("addressdetails", "0");
   url.searchParams.set("countrycodes", "br");
+  url.searchParams.set("city", "São Paulo");
+  url.searchParams.set("state", "São Paulo");
+  url.searchParams.set("viewbox", `${SPTRANS_SEARCH_BOUNDS.minLongitude},${SPTRANS_SEARCH_BOUNDS.maxLatitude},${SPTRANS_SEARCH_BOUNDS.maxLongitude},${SPTRANS_SEARCH_BOUNDS.minLatitude}`);
+  url.searchParams.set("bounded", "1");
   url.searchParams.set("accept-language", "pt-BR");
   url.searchParams.set("limit", "5");
   const response = await fetch(url, { headers: { "User-Agent": "UrbicoApp/1.0 (projeto pessoal de mobilidade urbana)" } });
@@ -59,7 +89,7 @@ async function suggestAddressesViaNominatim(query: string): Promise<GeocodedPlac
       if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || !item.display_name) return null;
       return { name: item.name ?? item.display_name, address: item.display_name, latitude, longitude };
     })
-    .filter((place): place is GeocodedPlace => Boolean(place));
+    .filter((place): place is GeocodedPlace => Boolean(place) && isWithinSptransSearchArea(place));
 }
 
 export async function suggestAddresses(query: string): Promise<GeocodedPlace[]> {
