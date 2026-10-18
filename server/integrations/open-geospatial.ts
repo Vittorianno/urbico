@@ -58,8 +58,13 @@ async function suggestAddressesViaPelias(query: string): Promise<GeocodedPlace[]
   const payload = (await response.json()) as PeliasResponse;
   return (payload.features ?? [])
     .filter((feature) => {
-      const locality = feature.properties?.locality ?? feature.properties?.localadmin ?? feature.properties?.county;
-      return !locality || normalizeLocality(locality) === "sao paulo";
+      const locality = feature.properties?.locality ?? feature.properties?.county;
+      const label = feature.properties?.label ?? feature.properties?.name ?? "";
+      // Se o Pelias informar município/região, ela precisa ser São Paulo.
+      // Sem metadado de localidade, exigimos que o rótulo confirme a cidade.
+      return locality
+        ? normalizeLocality(locality) === "sao paulo"
+        : normalizeLocality(label).includes("sao paulo");
     })
     .map((feature) => mapPeliasFeature(feature, query))
     .filter((place): place is GeocodedPlace => place !== null && isWithinSptransSearchArea(place));
