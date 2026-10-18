@@ -41,7 +41,32 @@ async function suggestAddressesViaPelias(query: string): Promise<GeocodedPlace[]
 // (política de uso do Nominatim) e um limite de ~1 requisição por segundo.
 type NominatimResult = { display_name?: string; lat?: string; lon?: string; name?: string };
 
-async function suggestAddressesViaNominatim(query: string): Promise<GeocodedPlace[]> {
+// FIX (HTTP 429): o Nominatim público limita a ~1 requisição por segundo por
+// IP, e a tela de endereço consultava a cada letra digitada — o limite estourava
+// e TODA busca passava a falhar. Agora o servidor (1) guarda respostas em cache
+// por 10 min, (2) junta pedidos idênticos em andamento, (3) espaça as chamadas
+// reais em pelo menos 1,1 s, num único fila, (4) descarta excesso quando já há
+// fila e (5) ao receber 429 pausa as chamadas (respeitando Retry-After) e
+// devolve o que houver em cache, em vez de lançar erro a cada tecla.
+const NOMINATIM_MIN_INTERVAL_MS = 1_100;
+const NOMINATIM_COOLDOWN_MS = 60_000;
+const NOMINATIM_CACHE_TTL_MS = 10 * 60_000;
+const NOMINATIM_CACHE_MAX_ENTRIES = 200;
+const NOMINATIM_MAX_PENDING = 3;
+
+const nominatimCache = new Map<string, { places: GeocodedPlace[]; at: number }>();
+const nominatimInFlight = new Map<string, Promise<GeocodedPlace[]>>();
+let nominatimQueue: Promise<void> = Promise.resolve();
+let nominatimPending = 0;
+let nominatimNextAllowedAt = 0;
+let nominatimBlockedUntil = 0;
+
+async function fetchNominatim(query: string, key: string): Promise<GeocodedPlace[]> {
+  const wait = nominatimNextAllowedAt - Date.now();
+  if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
+  if (Date.now() < nominatimBlockedUntil) return nominatimCache.get(key)?.places ?? [];
+  nominatimNextAllowedAt = Date.now() + NOMINATIM_MIN_INTERVAL_MS;
+
   const url = new URL("https://nominatim.openstreetmap.org/search");
   url.searchParams.set("q", query);
   url.searchParams.set("format", "jsonv2");
@@ -50,9 +75,18 @@ async function suggestAddressesViaNominatim(query: string): Promise<GeocodedPlac
   url.searchParams.set("accept-language", "pt-BR");
   url.searchParams.set("limit", "5");
   const response = await fetch(url, { headers: { "User-Agent": "UrbicoApp/1.0 (projeto pessoal de mobilidade urbana)" } });
+
+  if (response.status === 429 || response.status === 503) {
+    const retryAfterSeconds = Number(response.headers?.get("retry-after"));
+    const pauseMs = Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0 ? retryAfterSeconds * 1000 : NOMINATIM_COOLDOWN_MS;
+    nominatimBlockedUntil = Date.now() + pauseMs;
+    console.warn(`[nominatim] limite de uso atingido (HTTP ${response.status}); buscas pausadas por ${Math.round(pauseMs / 1000)} s.`);
+    return nominatimCache.get(key)?.places ?? [];
+  }
   if (!response.ok) throw new Error(`O Nominatim respondeu com status ${response.status}.`);
+
   const payload = (await response.json()) as NominatimResult[];
-  return payload
+  const places = payload
     .map((item) => {
       const latitude = Number(item.lat);
       const longitude = Number(item.lon);
@@ -60,6 +94,38 @@ async function suggestAddressesViaNominatim(query: string): Promise<GeocodedPlac
       return { name: item.name ?? item.display_name, address: item.display_name, latitude, longitude };
     })
     .filter((place): place is GeocodedPlace => Boolean(place));
+
+  nominatimCache.set(key, { places, at: Date.now() });
+  if (nominatimCache.size > NOMINATIM_CACHE_MAX_ENTRIES) {
+    const oldest = nominatimCache.keys().next().value;
+    if (oldest !== undefined) nominatimCache.delete(oldest);
+  }
+  return places;
+}
+
+async function suggestAddressesViaNominatim(query: string): Promise<GeocodedPlace[]> {
+  const key = query.trim().toLowerCase().replace(/\s+/g, " ");
+  const cached = nominatimCache.get(key);
+  if (cached && Date.now() - cached.at < NOMINATIM_CACHE_TTL_MS) return cached.places;
+  if (Date.now() < nominatimBlockedUntil) return cached?.places ?? [];
+  const inFlight = nominatimInFlight.get(key);
+  if (inFlight) return inFlight;
+  if (nominatimPending >= NOMINATIM_MAX_PENDING) return cached?.places ?? [];
+
+  nominatimPending += 1;
+  const run = nominatimQueue.then(() => fetchNominatim(query, key)).finally(() => {
+    nominatimPending -= 1;
+  });
+  nominatimQueue = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  nominatimInFlight.set(key, run);
+  try {
+    return await run;
+  } finally {
+    nominatimInFlight.delete(key);
+  }
 }
 
 export async function suggestAddresses(query: string): Promise<GeocodedPlace[]> {

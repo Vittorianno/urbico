@@ -44,10 +44,22 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 const DEPARTURE_ALERT_INTERVAL_MS = 60_000;
 
 function startDepartureAlertScheduler() {
+  let lastFailure = "";
   const run = () => {
-    evaluateDepartureAlerts().catch((error) => {
-      console.error("[departure-alerts] evaluation failed:", error);
-    });
+    evaluateDepartureAlerts()
+      .then(() => {
+        lastFailure = "";
+      })
+      .catch((error) => {
+        // Registra uma linha curta e só quando o motivo muda (antes: a consulta
+        // SQL inteira com stack a cada minuto enquanto o banco estava fora).
+        const code = (error as { cause?: { code?: string } })?.cause?.code;
+        const reason = code ?? (error instanceof Error ? error.message.slice(0, 120) : "erro desconhecido");
+        if (reason !== lastFailure) {
+          lastFailure = reason;
+          console.error("[departure-alerts] avaliação falhou:", reason);
+        }
+      });
   };
   run();
   setInterval(run, DEPARTURE_ALERT_INTERVAL_MS);

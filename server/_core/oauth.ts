@@ -1,4 +1,5 @@
 import { COOKIE_NAME } from "../../shared/const.js";
+import { HttpError } from "../../shared/_core/errors.js";
 import type { Express, Request, Response } from "express";
 import { getSessionCookieOptions } from "./cookies";
 import { sdk } from "./sdk";
@@ -28,13 +29,22 @@ export function registerOAuthRoutes(app: Express) {
 
   // Usuário autenticado atual - funciona com cookie (web) ou Bearer token
   // (mobile), ambos a sessão própria do Urbico.
+  //
+  // 401 = não há sessão válida (o app pode descartá-la). Qualquer outra falha
+  // (ex.: banco de dados fora do ar) é 503 — antes tudo virava 401, e o app
+  // achava que a sessão era inválida e deslogava a pessoa sem motivo.
   app.get("/api/auth/me", async (req: Request, res: Response) => {
     try {
       const user = await sdk.authenticateRequest(req);
       res.json({ user: buildUserResponse(user) });
     } catch (error) {
-      console.error("[Auth] /api/auth/me failed:", error);
-      res.status(401).json({ error: "Not authenticated", user: null });
+      if (error instanceof HttpError) {
+        res.status(401).json({ error: "Not authenticated", user: null });
+        return;
+      }
+      const code = (error as { cause?: { code?: string } })?.cause?.code;
+      console.error("[Auth] /api/auth/me indisponível:", code ?? (error instanceof Error ? error.message.slice(0, 120) : "erro desconhecido"));
+      res.status(503).json({ error: "Serviço de conta indisponível", user: null });
     }
   });
 }

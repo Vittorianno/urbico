@@ -12,6 +12,12 @@ export class ApiError extends Error {
   }
 }
 
+// 401 em /api/auth/me é o resultado normal de "não está logado" (visitante) —
+// não deve poluir o console com erro.
+function isExpectedUnauthenticated(endpoint: string, status: number) {
+  return endpoint === "/api/auth/me" && (status === 401 || status === 403);
+}
+
 export async function apiCall<T>(
   endpoint: string,
   options: RequestInit = {},
@@ -47,7 +53,9 @@ export async function apiCall<T>(
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("[API] Error response:", errorText);
+      if (!isExpectedUnauthenticated(endpoint, response.status)) {
+        console.error("[API] Error response:", errorText);
+      }
       let errorMessage = errorText;
       try {
         const errorJson = JSON.parse(errorText);
@@ -69,7 +77,9 @@ export async function apiCall<T>(
     const text = await response.text();
     return (text ? JSON.parse(text) : {}) as T;
   } catch (error) {
-    console.error("[API] Request failed:", error);
+    if (!(error instanceof ApiError && isExpectedUnauthenticated(endpoint, error.status))) {
+      console.error("[API] Request failed:", error);
+    }
     if (error instanceof Error) {
       throw error;
     }
@@ -86,8 +96,9 @@ export async function logout(): Promise<void> {
 
 // Get current authenticated user (web uses cookie-based auth).
 // Devolve null SOMENTE quando o servidor responde que não há sessão válida
-// (401/403). Falha de rede ou erro do servidor lança — quem chama não deve
-// tratar isso como "sessão inválida" nem apagar o token.
+// (401/403). Falha de rede ou erro do servidor (inclusive 503, banco fora do
+// ar) lança — quem chama não deve tratar isso como "sessão inválida" nem
+// apagar o token.
 export async function getMe(): Promise<{
   id: number;
   openId: string;
@@ -105,7 +116,6 @@ export async function getMe(): Promise<{
     if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
       return null;
     }
-    console.error("[API] getMe failed:", error);
     throw error;
   }
 }

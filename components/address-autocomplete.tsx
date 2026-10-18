@@ -1,4 +1,5 @@
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import { useEffect, useState } from "react";
 import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { colors } from "@/components/urbico-ui";
@@ -20,6 +21,13 @@ type AddressAutocompleteProps = {
   compact?: boolean;
 };
 
+// FIX (HTTP 429 do Nominatim): a busca era disparada a CADA letra digitada
+// (e repetida uma vez em caso de erro). O serviço público de endereços limita
+// ~1 consulta por segundo, então o limite estourava e todas as buscas falhavam.
+// Agora a consulta só sai depois de uma pausa na digitação (ou ao tocar em
+// buscar), sem repetição automática.
+const SEARCH_DEBOUNCE_MS = 700;
+
 export function AddressAutocomplete({
   value,
   onChangeText,
@@ -28,10 +36,19 @@ export function AddressAutocomplete({
   onSubmit,
   compact = false,
 }: AddressAutocompleteProps) {
-  const enabled = value.trim().length >= 3;
+  const trimmed = value.trim();
+  const [debouncedQuery, setDebouncedQuery] = useState(trimmed);
+
+  useEffect(() => {
+    const timeout = setTimeout(() => setDebouncedQuery(trimmed), SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timeout);
+  }, [trimmed]);
+
+  const enabled = debouncedQuery.length >= 3;
+  const settled = debouncedQuery === trimmed;
   const suggestions = trpc.routing.suggestAddresses.useQuery(
-    { query: value.trim() },
-    { enabled, staleTime: 30_000 },
+    { query: debouncedQuery },
+    { enabled, staleTime: 5 * 60_000, retry: false },
   );
 
   // FIX: antes, `confirm()` chamava `onSubmit?.()` mesmo quando não havia
@@ -48,14 +65,16 @@ export function AddressAutocomplete({
   };
 
   const handleSearch = () => {
-    if (suggestions.data?.[0]) {
+    if (settled && suggestions.data?.[0]) {
       confirm();
       return;
     }
-    void suggestions.refetch();
+    // Ainda digitando (ou sem resultado): busca agora, sem esperar a pausa.
+    if (!settled) setDebouncedQuery(trimmed);
+    else void suggestions.refetch();
   };
 
-  const showManualHint = enabled && !suggestions.isFetching && !suggestions.data?.length;
+  const showManualHint = enabled && settled && !suggestions.isFetching && !suggestions.data?.length;
 
   return (
     <View style={styles.container}>
