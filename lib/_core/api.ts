@@ -12,10 +12,13 @@ export class ApiError extends Error {
   }
 }
 
-// 401 em /api/auth/me é o resultado normal de "não está logado" (visitante) —
-// não deve poluir o console com erro.
-function isExpectedUnauthenticated(endpoint: string, status: number) {
-  return endpoint === "/api/auth/me" && (status === 401 || status === 403);
+// Respostas esperadas de /api/auth/me que não devem aparecer como ERRO no
+// console (no web, console.error abre a caixa vermelha do LogBox):
+// - 401/403: não está logado (visitante) — normal;
+// - 503: o servidor está sem banco de dados — o app segue como visitante e o
+//   Perfil mostra "Tentar novamente" (o motivo aparece no log do SERVIDOR).
+function isExpectedAuthStatus(endpoint: string, status: number) {
+  return endpoint === "/api/auth/me" && (status === 401 || status === 403 || status === 503);
 }
 
 export async function apiCall<T>(
@@ -53,7 +56,7 @@ export async function apiCall<T>(
 
     if (!response.ok) {
       const errorText = await response.text();
-      if (!isExpectedUnauthenticated(endpoint, response.status)) {
+      if (!isExpectedAuthStatus(endpoint, response.status)) {
         console.error("[API] Error response:", errorText);
       }
       let errorMessage = errorText;
@@ -77,7 +80,7 @@ export async function apiCall<T>(
     const text = await response.text();
     return (text ? JSON.parse(text) : {}) as T;
   } catch (error) {
-    if (!(error instanceof ApiError && isExpectedUnauthenticated(endpoint, error.status))) {
+    if (!(error instanceof ApiError && isExpectedAuthStatus(endpoint, error.status))) {
       console.error("[API] Request failed:", error);
     }
     if (error instanceof Error) {
@@ -96,9 +99,9 @@ export async function logout(): Promise<void> {
 
 // Get current authenticated user (web uses cookie-based auth).
 // Devolve null SOMENTE quando o servidor responde que não há sessão válida
-// (401/403). Falha de rede ou erro do servidor (inclusive 503, banco fora do
-// ar) lança — quem chama não deve tratar isso como "sessão inválida" nem
-// apagar o token.
+// (401/403). Falha de rede ou erro do servidor (inclusive 503, banco de dados
+// fora do ar) lança — quem chama não deve tratar isso como "sessão inválida"
+// nem apagar o token.
 export async function getMe(): Promise<{
   id: number;
   openId: string;
@@ -115,6 +118,9 @@ export async function getMe(): Promise<{
   } catch (error) {
     if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
       return null;
+    }
+    if (error instanceof ApiError && error.status === 503) {
+      console.warn("[Auth] O servidor está sem acesso ao banco de dados; a conta fica indisponível (veja o log do servidor).");
     }
     throw error;
   }

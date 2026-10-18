@@ -34,9 +34,13 @@ export type StopPrediction = {
   }>;
 };
 
-type RawLine = { cl: number; lc: boolean; lt0: string; lt1: string; sl: 1 | 2; tl: number; tp: string; ts: string };
+// Linha/Buscar (e BuscarLinhaSentido): lt = 1ª parte do letreiro (ex.: "8000"),
+// tl = sufixo (10, 21, 31...), tp/ts = terminais principal/secundário. lt0/lt1
+// (destino/origem) só vierem em outras respostas — mantidos opcionais.
+type RawLine = { cl: number; lc: boolean; lt?: string; lt0?: string; lt1?: string; sl: 1 | 2; tl: number; tp: string; ts: string };
 type RawStop = { cp: number; np: string; ed: string; py: number; px: number };
 type RawVehicle = { p: number; t?: string; a?: boolean; ta?: string; py: number; px: number };
+// Previsao/Parada: c = letreiro completo (ex.: "8000-10"), lt0 = destino, lt1 = origem.
 type RawPredictionLine = { c: string; cl: number; sl: 1 | 2; lt0: string; lt1: string; qv: number; vs: RawVehicle[] };
 type RawPrediction = { hr: string; p: RawStop & { l: RawPredictionLine[] } };
 
@@ -46,9 +50,21 @@ function getToken() {
   return token;
 }
 
+// FIX: a lista de "Próximos ônibus" mostrava "10-TERM. LAPA / Destino não
+// informado / Origem não informada": o letreiro era montado com o sufixo (tl) +
+// o nome do terminal, em vez de letreiro (lt) + sufixo (tl), e destino/origem
+// vinham de lt0/lt1, que a busca de linhas não devolve. Agora o letreiro é
+// "8000-10" e destino/origem vêm dos terminais conforme o sentido. Se a API
+// não trouxer `lt`, mantém o formato antigo como último recurso.
 function mapLine(raw: RawLine | RawPredictionLine): TransitLine {
-  const label = "c" in raw ? raw.c : raw.lc ? `${raw.tl}-${raw.tp}` : `${raw.tl}-${raw.ts}`;
-  return { id: raw.cl, label, direction: raw.sl, destination: raw.lt0, origin: raw.lt1 };
+  if ("c" in raw) {
+    return { id: raw.cl, label: raw.c, direction: raw.sl, destination: raw.lt0, origin: raw.lt1 };
+  }
+  const label = raw.lt ? `${raw.lt}-${raw.tl}` : raw.lc ? `${raw.tl}-${raw.tp}` : `${raw.tl}-${raw.ts}`;
+  const forward = raw.sl === 1;
+  const origin = raw.lt1 ?? (raw.lc || forward ? raw.tp : raw.ts);
+  const destination = raw.lt0 ?? (raw.lc ? raw.tp : forward ? raw.ts : raw.tp);
+  return { id: raw.cl, label, direction: raw.sl, destination, origin };
 }
 
 function mapStop(raw: RawStop): TransitStop {
