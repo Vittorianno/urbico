@@ -3,8 +3,7 @@ import { router } from "expo-router";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { ScreenContainer } from "@/components/screen-container";
-import { BackHeader, InfoCard, PrimaryButton, SectionTitle } from "@/components/urbico-ui";
-import { colors } from "@/components/urbico-ui";
+import { BackHeader, InfoCard, PrimaryButton, SectionTitle, colors } from "@/components/urbico-ui";
 
 const plannedBenefits = [
   { icon: "notifications-active" as const, title: "Alertas avançados", description: "Preferências e alertas de mobilidade configuráveis." },
