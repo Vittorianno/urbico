@@ -22,7 +22,7 @@ const SPTRANS_SEARCH_BOUNDS = {
 };
 
 function normalizeLocality(value: string): string {
-  return value.toLowerCase().normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").trim();
+  return value.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
 }
 
 function isWithinSptransSearchArea(place: GeocodedPlace): boolean {
