@@ -1,0 +1,3 @@
+#!/usr/bin/env sh
+# Bloqueia o commit se houver segredo ou arquivo .env no que está sendo commitado.
+exec node scripts/check-secrets.mjs --staged

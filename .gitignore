@@ -20,8 +20,10 @@ expo-env.d.ts
 .kotlin/
 *.orig.*
 *.jks
+*.keystore
 *.p8
 *.p12
+*.pfx
 *.key
 *.mobileprovision
 
@@ -37,10 +39,26 @@ yarn-error.*
 .DS_Store
 *.pem
 
-# local env files (nunca commitar segredos reais)
+# ---------------------------------------------------------------------------
+# SEGREDOS — chaves de API, tokens e senhas vivem SOMENTE no .env (local).
+# Nada abaixo pode ser commitado. Veja docs/SEGREDOS.md e
+# scripts/check-secrets.mjs (roda no pre-commit, no pre-push e no GitHub).
+# ---------------------------------------------------------------------------
 .env
-.env.local
-.env*.local
+.env.*
+!.env.example
+*.env
+.envrc
+
+# Configurações do Firebase/Google trazem chave de API: ficam fora do Git.
+google-services.json
+GoogleService-Info.plist
+
+# Credenciais de conta de serviço e arquivos de login locais.
+service-account*.json
+*-service-account*.json
+credentials.json
+.git-credentials
 
 # typescript
 *.tsbuildinfo

@@ -1,0 +1,3 @@
+#!/usr/bin/env sh
+# Última barreira antes de enviar ao GitHub: confere todos os arquivos versionados.
+exec node scripts/check-secrets.mjs
