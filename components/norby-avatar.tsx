@@ -1,7 +1,7 @@
 import Svg, { Circle, Defs, Ellipse, LinearGradient, Path, Rect, Stop } from "react-native-svg";
 
-export function NorbyAvatar({ large = false }: { large?: boolean }) {
-  const size = large ? 82 : 44;
+export function NorbyAvatar({ large = false, diameter }: { large?: boolean; diameter?: number }) {
+  const size = diameter ?? (large ? 82 : 44);
   return (
     <Svg width={size} height={size} viewBox="0 0 100 100" accessibilityLabel="Mascote Norby">
       <Defs>
