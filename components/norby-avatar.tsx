@@ -1,4 +1,4 @@
-import Svg, { Circle, Defs, Ellipse, LinearGradient, Path, Rect, Stop } from "react-native-svg";
+import Svg, { Circle, Defs, Ellipse, LinearGradient, Path, Stop } from "react-native-svg";
 
 export function NorbyAvatar({ large = false, diameter }: { large?: boolean; diameter?: number }) {
   const size = diameter ?? (large ? 82 : 44);
