@@ -5,6 +5,7 @@ import { HapticTab } from "@/components/haptic-tab";
 import { Platform } from "react-native";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { colors } from "@/components/urbico-ui";
+import { NorbyAvatar } from "@/components/norby-avatar";
 
 const tabIcons = {
   home: "home",
@@ -14,7 +15,10 @@ const tabIcons = {
 } as const;
 
 function TabIcon({ name, color }: { name: keyof typeof tabIcons; color: string }) {
-  return <MaterialIcons name={tabIcons[name]} size={name === "norby" ? 25 : 24} color={color} />;
+  if (name === "norby") {
+    return <NorbyAvatar />;
+  }
+  return <MaterialIcons name={tabIcons[name]} size={24} color={color} />;
 }
 
 export default function TabLayout() {
