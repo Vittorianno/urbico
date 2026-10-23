@@ -16,7 +16,7 @@ const tabIcons = {
 
 function TabIcon({ name, color }: { name: keyof typeof tabIcons; color: string }) {
   if (name === "norby") {
-    return <NorbyAvatar />;
+    return <NorbyAvatar diameter={25} />;
   }
   return <MaterialIcons name={tabIcons[name]} size={24} color={color} />;
 }
