@@ -1,8 +1,9 @@
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { router } from "expo-router";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { AdBanner } from "@/components/ad-banner";
+import { NorbyAvatar } from "@/components/norby-avatar";
 import { ScreenContainer } from "@/components/screen-container";
 import { colors, InfoCard, PrimaryButton, SectionTitle } from "@/components/urbico-ui";
 import { favoriteRouteParams, isFavoriteConfigured } from "@/lib/favorite-navigation";
@@ -31,7 +32,10 @@ export default function HomeScreen() {
             <MaterialIcons name="menu" size={23} color={colors.text} />
           </Pressable>
           <View style={styles.brandWrap}>
-            <Text style={styles.brand}>Urbi<Text style={styles.brandAccent}>co</Text></Text>
+            <View style={styles.brandIdentity}>
+              <Image source={require("@/assets/images/icon.png")} style={styles.brandMark} resizeMode="contain" accessibilityLabel="Símbolo Urbico" />
+              <Text style={styles.brand}>Urbi<Text style={styles.brandAccent}>co</Text></Text>
+            </View>
             <Text style={styles.tagline}>Mobilidade inteligente para o seu dia.</Text>
           </View>
           {/* FIX: o rótulo de acessibilidade e o ícone de sino prometiam abrir
@@ -63,7 +67,7 @@ export default function HomeScreen() {
         <Pressable onPress={() => router.push("/norby")} style={({ pressed }) => [styles.norbyButton, pressed && styles.pressed]}>
           <View style={styles.norbyTopline}>
             <View style={styles.norbyAvatar}>
-              <MaterialIcons name="smart-toy" size={27} color={colors.cyan} />
+              <NorbyAvatar />
             </View>
             <View style={styles.norbyBadge}>
               <View style={styles.norbyBadgeDot} />
@@ -150,6 +154,8 @@ const styles = StyleSheet.create({
   header: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
   iconButton: { width: 40, height: 40, alignItems: "center", justifyContent: "center", position: "relative" },
   brandWrap: { alignItems: "center" },
+  brandIdentity: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7 },
+  brandMark: { width: 30, height: 30 },
   brand: { color: colors.text, fontSize: 31, lineHeight: 34, fontWeight: "800", letterSpacing: -1.4 },
   brandAccent: { color: colors.blue },
   tagline: { marginTop: 2, color: colors.muted, fontSize: 11, lineHeight: 15, textAlign: "center" },
