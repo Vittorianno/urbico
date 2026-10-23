@@ -1,4 +1,4 @@
-import Svg, { Circle, Defs, Ellipse, LinearGradient, Path, Stop } from "react-native-svg";
+import Svg, { Circle, Defs, LinearGradient, Path, Stop } from "react-native-svg";
 
 export function NorbyAvatar({ large = false, diameter }: { large?: boolean; diameter?: number }) {
   const size = diameter ?? (large ? 82 : 44);
@@ -6,37 +6,34 @@ export function NorbyAvatar({ large = false, diameter }: { large?: boolean; diam
   return (
     <Svg width={size} height={size} viewBox="0 0 100 100" accessibilityLabel="Mascote Norby">
       <Defs>
-        <LinearGradient id="norby-orbit" x1="0" y1="0" x2="1" y2="1">
-          <Stop offset="0" stopColor="#66F0E4" />
-          <Stop offset="1" stopColor="#2385FF" />
+        <LinearGradient id="norby-shell" x1="0" y1="0" x2="0.9" y2="1">
+          <Stop offset="0" stopColor="#FFFFFF" />
+          <Stop offset="1" stopColor="#DCE8F7" />
         </LinearGradient>
-        <LinearGradient id="norby-visor" x1="0" y1="0" x2="0.9" y2="1">
-          <Stop offset="0" stopColor="#183D5A" />
-          <Stop offset="1" stopColor="#07182B" />
+        <LinearGradient id="norby-blue" x1="0" y1="0" x2="1" y2="1">
+          <Stop offset="0" stopColor="#36B8FF" />
+          <Stop offset="1" stopColor="#1268D8" />
+        </LinearGradient>
+        <LinearGradient id="norby-visor" x1="0" y1="0" x2="0" y2="1">
+          <Stop offset="0" stopColor="#102D53" />
+          <Stop offset="1" stopColor="#06162D" />
         </LinearGradient>
       </Defs>
-
-      {/* Orbit and route nodes: Norby as a mobility guide, not a generic robot. */}
-      <Circle cx="50" cy="50" r="47" fill="#0C2035" />
-      <Circle cx="50" cy="50" r="44" fill="none" stroke="#1C4260" strokeWidth="2" />
-      <Path d="M20 26 C30 10 54 8 70 19" fill="none" stroke="#3ED6D1" strokeWidth="3" strokeLinecap="round" />
-      <Circle cx="22" cy="24" r="4" fill="#3ED6D1" />
-      <Circle cx="71" cy="19" r="4" fill="#3ED6D1" />
-
-      {/* Rounded transit-companion silhouette with a distinctive lower chin. */}
-      <Path d="M27 29 Q27 22 36 22 H64 Q75 22 75 34 V61 Q75 70 66 74 L50 84 L34 74 Q25 70 25 61 V36 Q25 29 27 29Z" fill="url(#norby-orbit)" />
-      <Path d="M31 35 Q31 29 39 29 H61 Q69 29 69 37 V59 Q69 65 62 68 L50 75 L38 68 Q31 65 31 59Z" fill="url(#norby-visor)" stroke="#9AF5F0" strokeWidth="1.3" />
-
-      {/* Eyes and warm, friendly expression. */}
-      <Ellipse cx="41" cy="47" rx="4.3" ry="5.5" fill="#73F0EE" />
-      <Ellipse cx="59" cy="47" rx="4.3" ry="5.5" fill="#73F0EE" />
-      <Path d="M40 57 Q50 67 60 57" fill="none" stroke="#EAFBFF" strokeWidth="3.2" strokeLinecap="round" />
-
-      {/* Route marker on the chest. */}
-      <Path d="M43 76 L57 76" stroke="#77E8E2" strokeWidth="2.5" strokeLinecap="round" />
-      <Circle cx="50" cy="76" r="3" fill="#F4FCFF" />
-      <Circle cx="78" cy="76" r="9" fill="#07111D" stroke="#0C2035" strokeWidth="2" />
-      <Circle cx="78" cy="76" r="5.3" fill="#55CF84" />
+      <Circle cx="50" cy="50" r="48" fill="#071A33" />
+      <Circle cx="50" cy="50" r="45" fill="none" stroke="#1D4B80" strokeWidth="2" />
+      <Path d="M50 9 Q50 2 55 2 Q61 2 61 9 L59 21 L51 21Z" fill="url(#norby-blue)" />
+      <Circle cx="55" cy="7" r="5" fill="#55C9FF" />
+      <Path d="M22 34 Q22 22 34 22 H66 Q78 22 78 34 V62 Q78 70 70 75 L50 87 L30 75 Q22 70 22 62Z" fill="url(#norby-shell)" stroke="#B8D0EE" strokeWidth="1.4" />
+      <Path d="M27 36 Q27 27 37 27 H63 Q73 27 73 36 V60 Q73 66 66 70 L50 80 L34 70 Q27 66 27 60Z" fill="url(#norby-visor)" stroke="#2A5A91" strokeWidth="1.5" />
+      <Circle cx="17" cy="50" r="8" fill="url(#norby-blue)" stroke="#CDEAFF" strokeWidth="1.5" />
+      <Circle cx="17" cy="50" r="3.5" fill="#0A2447" />
+      <Circle cx="83" cy="50" r="8" fill="url(#norby-blue)" stroke="#CDEAFF" strokeWidth="1.5" />
+      <Circle cx="83" cy="50" r="3.5" fill="#0A2447" />
+      <Path d="M36 46 Q41 39 46 46" fill="none" stroke="#68D9FF" strokeWidth="3.4" strokeLinecap="round" />
+      <Path d="M54 46 Q59 39 64 46" fill="none" stroke="#68D9FF" strokeWidth="3.4" strokeLinecap="round" />
+      <Path d="M39 57 Q50 67 61 57" fill="none" stroke="#FFFFFF" strokeWidth="3.2" strokeLinecap="round" />
+      <Path d="M43 77 L57 77" stroke="#FFFFFF" strokeWidth="2" strokeLinecap="round" />
+      <Circle cx="50" cy="77" r="4" fill="url(#norby-blue)" stroke="#FFFFFF" strokeWidth="1" />
     </Svg>
   );
 }
