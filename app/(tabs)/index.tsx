@@ -4,6 +4,7 @@ import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-nati
 
 import { AdBanner } from "@/components/ad-banner";
 import { NorbyAvatar } from "@/components/norby-avatar";
+import { UrbicoNotificationIcon } from "@/components/urbico-notification-icon";
 import { ScreenContainer } from "@/components/screen-container";
 import { colors, InfoCard, PrimaryButton, SectionTitle } from "@/components/urbico-ui";
 import { favoriteRouteParams, isFavoriteConfigured } from "@/lib/favorite-navigation";
@@ -43,7 +44,7 @@ export default function HomeScreen() {
               já acessível pelo botão de menu à esquerda). Agora leva
               corretamente para /settings. */}
           <Pressable accessibilityLabel="Abrir configurações" onPress={() => router.push("/settings")} style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}>
-            <MaterialIcons name="notifications-none" size={22} color={colors.text} />
+            <UrbicoNotificationIcon size={22} color={colors.text} />
             <View style={styles.notificationDot} />
           </Pressable>
         </View>
