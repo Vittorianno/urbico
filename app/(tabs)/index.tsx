@@ -33,7 +33,7 @@ export default function HomeScreen() {
           </Pressable>
           <View style={styles.brandWrap}>
             <View style={styles.brandIdentity}>
-              <Image source={require("@/assets/images/icon.png")} style={styles.brandMark} resizeMode="contain" accessibilityLabel="Símbolo Urbico" />
+              <Image source={require("../../assets/images/icon.png")} style={styles.brandMark} resizeMode="contain" accessibilityLabel="Símbolo Urbico" />
               <Text style={styles.brand}>Urbi<Text style={styles.brandAccent}>co</Text></Text>
             </View>
             <Text style={styles.tagline}>Mobilidade inteligente para o seu dia.</Text>
