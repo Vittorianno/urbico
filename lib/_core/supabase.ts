@@ -40,6 +40,15 @@ export const supabase = createClient(
       autoRefreshToken: true,
       persistSession: true,
       detectSessionInUrl: Platform.OS === "web",
+      // FIX (OAuth Google): o padrão do supabase-js v2 é o fluxo "implicit",
+      // em que o retorno do Google traz os tokens no fragmento da URL
+      // (#access_token=...) e NÃO um `code`. O login nativo (app/login.tsx)
+      // depende de `exchangeCodeForSession`, que só existe no fluxo PKCE
+      // (retorno com ?code=...). Sem isto, "Continuar com Google" no
+      // Android/iOS nunca conseguia concluir a sessão. PKCE também é o fluxo
+      // recomendado para web e continua sendo tratado automaticamente por
+      // `detectSessionInUrl`.
+      flowType: "pkce",
     },
   },
 );

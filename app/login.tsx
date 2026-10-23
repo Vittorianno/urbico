@@ -1,5 +1,6 @@
 import AntDesign from "@expo/vector-icons/AntDesign";
 import { router } from "expo-router";
+import * as Linking from "expo-linking";
 import * as WebBrowser from "expo-web-browser";
 import { useEffect, useRef, useState } from "react";
 import {
@@ -23,6 +24,10 @@ import { isSupabaseConfigured, supabase } from "@/lib/_core/supabase";
 
 type Mode = "signIn" | "signUp";
 
+// URL de retorno do OAuth no nativo. Precisa estar cadastrada em Supabase →
+// Authentication → URL Configuration → Redirect URLs.
+const NATIVE_OAUTH_REDIRECT = "urbico://login";
+
 // FIX: ponto único de autenticação do Urbico (ver decisão de produto: não
 // duplicar telas/áreas de login em nenhum outro lugar do app — qualquer
 // funcionalidade que precise de conta só usa esta mesma sessão via
@@ -35,6 +40,17 @@ export default function LoginScreen() {
     promise: Promise<void>;
   } | null>(null);
   const pendingMethod = useRef<"password" | "google">("google");
+  // FIX (OAuth Google, web): se a página abriu voltando do Google (?code=,
+  // #access_token= ou ?error=), o supabase-js pode terminar a troca do código
+  // ANTES deste componente assinar onAuthStateChange. Nesse caso o evento que
+  // chega é INITIAL_SESSION (não SIGNED_IN) e o login ficaria parado. Captura
+  // isso uma única vez, na primeira renderização, antes de o supabase-js
+  // limpar a URL.
+  const returningFromOAuth = useRef<boolean>(
+    Platform.OS === "web" &&
+      typeof window !== "undefined" &&
+      /[?&#](code|access_token|error)=/.test(window.location.href),
+  );
   const [mode, setMode] = useState<Mode>("signIn");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -93,7 +109,10 @@ export default function LoginScreen() {
     if (!isSupabaseConfigured) return;
     const { data: subscription } = supabase.auth.onAuthStateChange(
       (event, session) => {
-        if (event === "SIGNED_IN" && session?.access_token) {
+        const completesLogin =
+          event === "SIGNED_IN" ||
+          (event === "INITIAL_SESSION" && returningFromOAuth.current);
+        if (completesLogin && session?.access_token) {
           setLoading(true);
           void completeUrbicoSession(
             session.access_token,
@@ -196,9 +215,13 @@ export default function LoginScreen() {
     pendingMethod.current = "google";
     try {
       if (Platform.OS === "web") {
+        // FIX: redirectTo sem query/hash antigos (origem + /login). Usar
+        // window.location.href podia carregar um ?code= ou #access_token=
+        // anterior para dentro da nova URL de retorno, e a URL precisa bater
+        // com a lista de Redirect URLs do Supabase.
         const { error } = await supabase.auth.signInWithOAuth({
           provider: "google",
-          options: { redirectTo: window.location.href },
+          options: { redirectTo: `${window.location.origin}/login` },
         });
         if (error) {
           Alert.alert("Não foi possível continuar com o Google", error.message);
@@ -211,7 +234,7 @@ export default function LoginScreen() {
 
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: "google",
-        options: { redirectTo: "urbico://login", skipBrowserRedirect: true },
+        options: { redirectTo: NATIVE_OAUTH_REDIRECT, skipBrowserRedirect: true },
       });
       if (error || !data?.url) {
         Alert.alert(
@@ -223,14 +246,38 @@ export default function LoginScreen() {
       }
       const result = await WebBrowser.openAuthSessionAsync(
         data.url,
-        "urbico://login",
+        NATIVE_OAUTH_REDIRECT,
       );
       if (result.type !== "success") {
         setLoading(false);
         return;
       }
+
+      // FIX (OAuth Google, nativo): `exchangeCodeForSession` recebe só o
+      // `code` (fluxo PKCE), não a URL inteira de retorno como era passado
+      // antes — isso sempre falhava com "invalid flow state". Extrai o código
+      // (ou o erro devolvido pelo provedor) da URL de retorno.
+      const { queryParams } = Linking.parse(result.url);
+      const rawError = queryParams?.error_description ?? queryParams?.error;
+      const providerError = Array.isArray(rawError) ? rawError[0] : rawError;
+      if (providerError) {
+        Alert.alert("Não foi possível continuar com o Google", String(providerError));
+        setLoading(false);
+        return;
+      }
+      const rawCode = queryParams?.code;
+      const authCode = Array.isArray(rawCode) ? rawCode[0] : rawCode;
+      if (!authCode) {
+        Alert.alert(
+          "Não foi possível continuar com o Google",
+          "O Google não devolveu o código de autorização. Tente novamente.",
+        );
+        setLoading(false);
+        return;
+      }
+
       const { error: exchangeError } =
-        await supabase.auth.exchangeCodeForSession(result.url);
+        await supabase.auth.exchangeCodeForSession(authCode);
       if (exchangeError) {
         Alert.alert(
           "Não foi possível continuar com o Google",

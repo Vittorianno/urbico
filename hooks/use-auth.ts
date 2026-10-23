@@ -1,5 +1,6 @@
 import * as Api from "@/lib/_core/api";
 import * as Auth from "@/lib/_core/auth";
+import { isSupabaseConfigured, supabase } from "@/lib/_core/supabase";
 import { analytics } from "@/lib/analytics";
 import {
   createContext,
@@ -95,6 +96,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.error("[Auth] Logout API call failed:", err);
     } finally {
       analytics.track("user_logout");
+      // FIX (OAuth Google): encerra também a sessão local do cliente Supabase
+      // (AsyncStorage/localStorage). Sem isto, a sessão do Supabase sobrevivia
+      // ao logout do Urbico e o próximo "Continuar com Google" reaproveitava a
+      // identidade anterior em vez de começar um login limpo.
+      if (isSupabaseConfigured) {
+        try {
+          await supabase.auth.signOut({ scope: "local" });
+        } catch (err) {
+          console.error("[Auth] Supabase signOut failed:", err);
+        }
+      }
       await Auth.removeSessionToken();
       await Auth.clearUserInfo();
       setUser(null);

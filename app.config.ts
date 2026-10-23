@@ -13,6 +13,22 @@ const env = {
   androidPackage: "com.app.urbico",
 };
 
+// FIX (Metro): `experiments.reactCompiler: true` faz o babel-preset-expo
+// carregar `babel-plugin-react-compiler` em toda transformação de arquivo. O
+// pacote não está declarado no package.json; se não estiver instalado/içado
+// no node_modules, o Metro falha ao transformar o primeiro módulo ("Cannot
+// find module 'babel-plugin-react-compiler'"). Agora o compilador só é
+// ligado quando o pacote realmente resolve — sem ele o app funciona normal,
+// apenas sem a otimização automática de memoização.
+function hasModule(name: string): boolean {
+  try {
+    require.resolve(name);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // FIX (AdMob): IDs de APP de TESTE oficiais do Google — documentados
 // publicamente em https://developers.google.com/admob/android/test-ads e
 // .../ios/test-ads, não são segredo nenhum. Usados como fallback sempre que
@@ -157,7 +173,7 @@ const config: ExpoConfig = {
   ],
   experiments: {
     typedRoutes: true,
-    reactCompiler: true,
+    reactCompiler: hasModule("babel-plugin-react-compiler"),
   },
 };
 
