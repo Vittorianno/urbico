@@ -4,6 +4,14 @@ import { analyticsEvents, crowdReports, departureAlerts, googleCalendarAccounts,
 import { ENV } from "./_core/env";
 import { decryptSecret, encryptSecret } from "./_core/secret-box";
 
+/** Erro operacional: a API não pode autenticar sem persistência MySQL disponível. */
+export class DatabaseUnavailableError extends Error {
+  constructor(message = "Banco de dados indisponível.") {
+    super(message);
+    this.name = "DatabaseUnavailableError";
+  }
+}
+
 let _db: ReturnType<typeof drizzle> | null = null;
 
 // Lazily create the drizzle instance so local tooling can run without a DB.
@@ -42,8 +50,7 @@ export async function upsertUser(user: InsertUser): Promise<void> {
 
   const db = await getDb();
   if (!db) {
-    console.warn("[Database] Cannot upsert user: database not available");
-    return;
+    throw new DatabaseUnavailableError();
   }
 
   try {
@@ -89,21 +96,41 @@ export async function upsertUser(user: InsertUser): Promise<void> {
       set: updateSet,
     });
   } catch (error) {
-    console.error("[Database] Failed to upsert user:", error);
-    throw error;
+    const diagnostic = error && typeof error === "object"
+      ? error as { name?: unknown; code?: unknown }
+      : {};
+    console.error("[Database] Failed to upsert user:", {
+      name: typeof diagnostic.name === "string" ? diagnostic.name : "UnknownError",
+      code: typeof diagnostic.code === "string" ? diagnostic.code : undefined,
+    });
+    if (error instanceof DatabaseUnavailableError) throw error;
+    const unavailable = new DatabaseUnavailableError();
+    (unavailable as Error & { cause?: unknown }).cause = error;
+    throw unavailable;
   }
 }
 
 export async function getUserByOpenId(openId: string) {
   const db = await getDb();
   if (!db) {
-    console.warn("[Database] Cannot get user: database not available");
-    return undefined;
+    throw new DatabaseUnavailableError();
   }
 
-  const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
-
-  return result.length > 0 ? result[0] : undefined;
+  try {
+    const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
+    return result.length > 0 ? result[0] : undefined;
+  } catch (error) {
+    const diagnostic = error && typeof error === "object"
+      ? error as { name?: unknown; code?: unknown }
+      : {};
+    console.error("[Database] Failed to read user:", {
+      name: typeof diagnostic.name === "string" ? diagnostic.name : "UnknownError",
+      code: typeof diagnostic.code === "string" ? diagnostic.code : undefined,
+    });
+    const unavailable = new DatabaseUnavailableError();
+    (unavailable as Error & { cause?: unknown }).cause = error;
+    throw unavailable;
+  }
 }
 
 export async function upsertDepartureAlert(alert: InsertDepartureAlert) {
