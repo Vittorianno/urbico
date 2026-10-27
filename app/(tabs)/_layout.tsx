@@ -2,7 +2,7 @@ import { Tabs } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { HapticTab } from "@/components/haptic-tab";
-import { Platform } from "react-native";
+import { Platform, type ColorValue } from "react-native";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { colors } from "@/components/urbico-ui";
 import { NorbyAvatar } from "@/components/norby-avatar";
@@ -14,7 +14,7 @@ const tabIcons = {
   profile: "account-circle",
 } as const;
 
-function TabIcon({ name, color }: { name: keyof typeof tabIcons; color: string }) {
+function TabIcon({ name, color }: { name: keyof typeof tabIcons; color: ColorValue }) {
   if (name === "norby") {
     return <NorbyAvatar diameter={25} />;
   }
