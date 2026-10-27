@@ -35,6 +35,27 @@ describe("secret-box", () => {
     vi.stubEnv("TOKEN_ENCRYPTION_KEY", "");
     expect(() => encryptSecret("segredo")).toThrow(/TOKEN_ENCRYPTION_KEY/);
   });
+
+  it("usa um IV novo a cada gravação do mesmo token", () => {
+    vi.stubEnv("TOKEN_ENCRYPTION_KEY", "chave-de-teste-bem-longa-e-aleatoria");
+    expect(encryptSecret("mesmo-token")).not.toBe(encryptSecret("mesmo-token"));
+  });
+
+  it("rejeita ciphertext adulterado", () => {
+    vi.stubEnv("TOKEN_ENCRYPTION_KEY", "chave-de-teste-bem-longa-e-aleatoria");
+    const stored = encryptSecret("refresh-token");
+    const parts = stored.split(":");
+    const data = parts[4];
+    parts[4] = `${data[0] === "A" ? "B" : "A"}${data.slice(1)}`;
+    expect(() => decryptSecret(parts.join(":"))).toThrow();
+  });
+
+  it("recusa descriptografar um token criptografado sem a chave", () => {
+    vi.stubEnv("TOKEN_ENCRYPTION_KEY", "chave-de-teste-bem-longa-e-aleatoria");
+    const stored = encryptSecret("refresh-token");
+    vi.stubEnv("TOKEN_ENCRYPTION_KEY", "");
+    expect(() => decryptSecret(stored)).toThrow(/TOKEN_ENCRYPTION_KEY/);
+  });
 });
 
 describe("Norby: mecanismo llm/fallback", () => {
