@@ -89,9 +89,13 @@ async function startServer() {
   app.use(express.json({ limit: "1mb" }));
   app.use(express.urlencoded({ limit: "1mb", extended: true }));
 
-  // Rate limit por IP. Valores generosos para uso normal (polling de
-  // veículos, chat) e restritivos para troca de token de login.
+  // Rate limit por IP. O limite geral cobre sessão, perfil e logout; a troca
+  // de sessão recebe ainda um teto mais restritivo. O callback OAuth e o cron
+  // também são limitados para reduzir abuso/brute force antes da lógica interna.
+  app.use("/api/auth", createRateLimiter({ windowMs: 60_000, max: 120 }));
   app.use("/api/auth/session", createRateLimiter({ windowMs: 60_000, max: 30 }));
+  app.use("/api/google-calendar", createRateLimiter({ windowMs: 60_000, max: 30 }));
+  app.use("/api/scheduled", createRateLimiter({ windowMs: 60_000, max: 10 }));
   app.use("/api/trpc", createRateLimiter({ windowMs: 60_000, max: 600 }));
 
   registerStorageProxy(app);
