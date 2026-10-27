@@ -53,6 +53,21 @@ describe("CORS", () => {
     expect(okNext).toHaveBeenCalledTimes(1);
   });
 
+  it("não aceita downgrade HTTP apenas porque o host coincide", () => {
+    const cors = createCorsMiddleware({ isProduction: true, allowedOrigins: [] });
+    const blockedRes = fakeRes();
+    const blockedNext = vi.fn();
+    cors({ headers: { origin: "http://api.urbico.app", host: "api.urbico.app" }, protocol: "https", method: "POST" } as never, blockedRes as never, blockedNext);
+    expect(blockedRes.statusCode).toBe(403);
+    expect(blockedNext).not.toHaveBeenCalled();
+
+    const allowedRes = fakeRes();
+    const allowedNext = vi.fn();
+    cors({ headers: { origin: "https://api.urbico.app", host: "api.urbico.app" }, protocol: "https", method: "POST" } as never, allowedRes as never, allowedNext);
+    expect(allowedRes.headers["Access-Control-Allow-Origin"]).toBe("https://api.urbico.app");
+    expect(allowedNext).toHaveBeenCalledTimes(1);
+  });
+
   it("não interfere em requisições sem Origin (app nativo)", () => {
     const cors = createCorsMiddleware({ isProduction: true, allowedOrigins: [] });
     const res = fakeRes();
