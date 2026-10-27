@@ -291,6 +291,16 @@ Isso roda **na nuvem** da Expo — funciona a partir de qualquer terminal com
 `eas-cli` e login, incluindo o Termux, mesmo sem SDK Android instalado
 localmente.
 
+### APK gerado pelo GitHub Actions
+
+O workflow manual `Android APK` compila um APK assinado com uma chave
+**temporária de desenvolvimento**, gerada durante cada execução. Ele serve
+para instalação e testes, não para publicação na Play Store. Como a chave muda
+a cada execução, um APK novo pode não instalar como atualização por cima do
+APK anterior; desinstale a versão de teste antes de instalar outra. Para
+distribuição contínua e publicação, use EAS com credenciais de assinatura
+persistentes e protegidas.
+
 ## Testes e qualidade
 
 ```bash
