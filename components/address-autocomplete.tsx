@@ -17,7 +17,7 @@ type AddressAutocompleteProps = {
   onChangeText: (value: string) => void;
   onSelect: (suggestion: AddressSuggestion) => void;
   placeholder?: string;
-  onSubmit?: () => void;
+  onSubmit?: (selected: AddressSuggestion) => void;
   compact?: boolean;
 };
 
@@ -39,36 +39,58 @@ export function AddressAutocomplete({
     { query: debouncedValue },
     { enabled, staleTime: 30_000 },
   );
+  // Geocoding is an explicit, one-shot action. Unlike autocomplete, it may use
+  // the policy-compliant cached/rate-limited Nominatim fallback on the server.
+  const geocodeResult = trpc.routing.geocode.useQuery(
+    { query: value.trim() },
+    { enabled: false, staleTime: 0 },
+  );
+  const [searchMessage, setSearchMessage] = useState<string | null>(null);
+  const isSearching = suggestions.isFetching || geocodeResult.isFetching;
+  const hasCurrentSuggestions = debouncedValue === value.trim() && Boolean(suggestions.data?.length);
 
-  // FIX: antes, `confirm()` chamava `onSubmit?.()` mesmo quando não havia
-  // nenhuma sugestão real (`suggestions.data?.[0]` ausente) — ou seja, dava
-  // pra "confirmar" um endereço que nunca foi geocodificado. Isso deixava
-  // favoritos e rotas salvos sem latitude/longitude, silenciosamente
-  // quebrados (ver REGRA 1: sem coordenadas não dá pra ir direto pra rota).
-  // Agora só avança quando existe uma sugestão de verdade selecionada.
-  const confirm = () => {
-    if (suggestions.data?.[0]) {
-      onSelect(suggestions.data[0]);
-      onSubmit?.();
-    }
-  };
-
-  const handleSearch = () => {
-    if (suggestions.data?.[0]) {
-      confirm();
+  const handleSearch = async () => {
+    setSearchMessage(null);
+    if (hasCurrentSuggestions && suggestions.data?.[0]) {
+      const selected = suggestions.data[0];
+      onSelect(selected);
+      onSubmit?.(selected);
       return;
     }
-    void suggestions.refetch();
+    if (value.trim().length < 2) {
+      setSearchMessage("Digite pelo menos dois caracteres para buscar o endereço.");
+      return;
+    }
+
+    const result = await geocodeResult.refetch();
+    if (result.data) {
+      onSelect(result.data);
+      onSubmit?.(result.data);
+      return;
+    }
+    setSearchMessage(
+      result.error
+        ? "Não foi possível consultar o endereço agora. Tente novamente."
+        : "Não encontramos coordenadas confiáveis para esse endereço. Ajuste o texto e tente novamente.",
+    );
   };
 
-  const showManualHint = enabled && !suggestions.isFetching && !suggestions.data?.length;
+  const confirm = () => { void handleSearch(); };
+  const showNoSuggestionsHint = enabled
+    && debouncedValue === value.trim()
+    && !suggestions.isFetching
+    && !suggestions.data?.length
+    && !searchMessage;
 
   return (
     <View style={styles.container}>
       <View style={[styles.field, compact && styles.fieldCompact]}>
         <TextInput
           value={value}
-          onChangeText={onChangeText}
+          onChangeText={(nextValue) => {
+            setSearchMessage(null);
+            onChangeText(nextValue);
+          }}
           onSubmitEditing={confirm}
           placeholder={placeholder}
           placeholderTextColor={colors.muted}
@@ -83,7 +105,7 @@ export function AddressAutocomplete({
           style={({ pressed }) => [styles.search, pressed && styles.pressed]}
         >
           <MaterialIcons
-            name={suggestions.isFetching ? "hourglass-top" : "search"}
+            name={isSearching ? "hourglass-top" : "search"}
             size={18}
             color="#FFFFFF"
           />
@@ -93,7 +115,7 @@ export function AddressAutocomplete({
         Busca limitada à área atendida pela SPTrans — São Paulo, SP.
       </Text>
 
-      {enabled && suggestions.data?.length ? (
+      {enabled && hasCurrentSuggestions && suggestions.data?.length ? (
         <FlatList
           data={suggestions.data}
           scrollEnabled={false}
@@ -102,7 +124,7 @@ export function AddressAutocomplete({
           style={styles.results}
           renderItem={({ item }) => (
             <Pressable
-              onPress={() => { onSelect(item); onSubmit?.(); }}
+              onPress={() => { onSelect(item); onSubmit?.(item); }}
               style={({ pressed }) => [styles.result, pressed && styles.pressed]}
             >
               <MaterialIcons name="place" size={17} color={colors.blue} />
@@ -119,11 +141,12 @@ export function AddressAutocomplete({
         />
       ) : null}
 
-      {showManualHint ? (
+      {searchMessage ? <Text style={styles.hint}>{searchMessage}</Text> : null}
+      {showNoSuggestionsHint ? (
         <Text style={styles.hint}>
           {suggestions.error
-            ? "Sugestões automáticas indisponíveis no momento. Tente novamente em instantes."
-            : "Nenhum endereço encontrado ainda. Ajuste o texto e toque em buscar."}
+            ? "Sugestões automáticas indisponíveis. Toque em buscar para tentar localizar este endereço."
+            : "Sem sugestões automáticas? Toque em buscar para tentar localizar este endereço."}
         </Text>
       ) : null}
     </View>
