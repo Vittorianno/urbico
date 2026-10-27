@@ -64,7 +64,11 @@ Resumo por categoria:
 | Variável | Obrigatória? | Efeito se ausente |
 |---|---|---|
 | `PORT` | Não | Usa 3000, ou a próxima porta livre |
+| `TRUST_PROXY` | Não | Em produção assume 1 proxy reverso; configure conforme a topologia real |
+| `CORS_ALLOWED_ORIGINS` | Sim para web em produção | Lista de origens web autorizadas, separadas por vírgula; app nativo sem `Origin` não é afetado |
 | `DATABASE_URL` | Não* | App inicia sem persistência: sem login salvo, sem alertas de saída, sem relatos de lotação |
+| `TOKEN_ENCRYPTION_KEY` | Sim se Google Agenda estiver habilitado | Criptografa refresh tokens AES-256-GCM; perder/trocar a chave exige reconectar as agendas |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI` | Não | Necessárias somente para conectar o Google Agenda |
 | `JWT_SECRET` | Sim, para autenticação funcionar | Sessões do Urbico não podem ser assinadas/verificadas |
 | `SUPABASE_URL`, `SUPABASE_ANON_KEY` | Sim, para login | Ver [Autenticação](#autenticação-supabase-auth) |
 | `OWNER_OPEN_ID` | Não | Ninguém recebe o papel "admin" automaticamente |
@@ -79,6 +83,11 @@ Resumo por categoria:
 
 *Tecnicamente opcional (o servidor não derruba sem ela), mas praticamente
 obrigatória — sem banco a maior parte dos recursos do produto fica inerte.
+
+### Health checks do backend
+
+- `GET /api/health`: liveness — confirma que o processo Express está respondendo; não garante que o banco esteja disponível.
+- `GET /api/ready`: readiness — executa uma consulta real `SELECT 1` no MySQL. Retorna HTTP 200 quando o banco responde e HTTP 503 quando `DATABASE_URL` está ausente ou o banco não está acessível. Use este endpoint para verificar se os recursos persistentes estão prontos, não como substituto da liveness.
 
 ## Execução local
 
