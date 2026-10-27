@@ -37,7 +37,11 @@ export function registerOAuthRoutes(app: Express) {
 
       res.json({ success: true, app_session_id: token, user: buildUserResponse(user) });
     } catch (error) {
-      console.error("[Auth] /api/auth/session failed:", error);
+      if (error instanceof db.DatabaseUnavailableError) {
+        res.status(503).json({ error: "Serviço temporariamente indisponível", code: "DATABASE_UNAVAILABLE" });
+        return;
+      }
+      console.error("[Auth] /api/auth/session failed:", error instanceof Error ? error.name : "UnknownError");
       res.status(401).json({ error: "Token do Supabase inválido" });
     }
   });
@@ -55,7 +59,11 @@ export function registerOAuthRoutes(app: Express) {
       const user = await sdk.authenticateRequest(req);
       res.json({ user: buildUserResponse(user) });
     } catch (error) {
-      console.error("[Auth] /api/auth/me failed:", error);
+      if (error instanceof db.DatabaseUnavailableError) {
+        res.status(503).json({ error: "Serviço temporariamente indisponível", code: "DATABASE_UNAVAILABLE", user: null });
+        return;
+      }
+      console.error("[Auth] /api/auth/me failed:", error instanceof Error ? error.name : "UnknownError");
       res.status(401).json({ error: "Not authenticated", user: null });
     }
   });
