@@ -128,11 +128,10 @@ arquiteturas ao mesmo tempo (ver `docs/AUDIT-REPORT.md`, Fase 11).
 ## Mapas, geocodificação e rotas (MapLibre / Pelias / Valhalla)
 
 - **Mapa**: [MapLibre](https://maplibre.org/) nativo (`@maplibre/maplibre-react-native`) e web (estilo aberto [OpenFreeMap](https://openfreemap.org/), sem chave de API). Não há dependência do Google Maps.
-- **Geocodificação / busca de endereço**: uma instância própria do [Pelias](https://pelias.io/) apontada por `PELIAS_BASE_URL`. Sem isso, a busca automática de endereço fica indisponível, mas o compromisso ainda pode ser salvo com endereço digitado manualmente.
-- **Rota a pé**: uma instância própria do [Valhalla](https://valhalla.github.io/valhalla/) apontada por `VALHALLA_BASE_URL`. Sem isso, o app usa uma estimativa simples de distância/velocidade em vez de uma rota real.
-
-Ambos os serviços rodam fora deste repositório (você precisa hospedá-los ou
-usar um provedor gerenciado); o app só consome as APIs HTTP deles.
+- **Geocodificação / busca de endereço**: usa uma instância própria do [Pelias](https://pelias.io/) quando `PELIAS_BASE_URL` está configurada. Sem ela — ou se ela estiver indisponível — o backend usa o serviço público Nominatim do OpenStreetMap como fallback.
+- **Rota a pé**: usa uma instância própria do [Valhalla](https://valhalla.github.io/valhalla/) quando `VALHALLA_BASE_URL` está configurada. Sem ela — ou se ela estiver indisponível — o backend tenta o servidor público de demonstração do OSRM (`router.project-osrm.org`).
+- **Limites do fallback público**: Nominatim e OSRM dependem de serviços de terceiros, sujeitos a disponibilidade, políticas de uso e limites de capacidade; não são uma garantia de SLA nem a escolha indicada para tráfego de produção em escala. Para maior controle, configure instâncias próprias de Pelias e Valhalla e respeite as políticas dos provedores públicos enquanto forem usados.
+- **Cobertura geográfica atual**: a busca de endereços está deliberadamente limitada à cidade de São Paulo, alinhada à integração de transporte público da SPTrans. Isso significa que Salvador e outras cidades ainda não estão cobertas pela busca de endereços, mesmo que o roteador OSRM possa calcular rotas para coordenadas válidas fora dessa área. A expansão para outras cidades exige alterar os filtros de geocodificação e a experiência de seleção de cidade.
 
 ## SPTrans (Olho Vivo)
 
