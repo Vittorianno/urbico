@@ -72,61 +72,97 @@ async function suggestAddressesViaPelias(query: string): Promise<GeocodedPlace[]
     .filter((place): place is GeocodedPlace => place !== null && isWithinSptransSearchArea(place));
 }
 
-// FIX: sem um PELIAS_BASE_URL configurado (o normal, já que rodar um Pelias
-// exige infraestrutura própria com Elasticsearch), `suggestAddresses` sempre
-// retornava `[]` — nenhuma sugestão de endereço aparecia nunca, o que
-// impedia salvar favoritos com coordenadas reais. O Nominatim (OpenStreetMap)
-// é um serviço público, gratuito e sem necessidade de chave de API, e serve
-// como busca de endereço "de verdade" pronta para uso, sem exigir nenhuma
-// infraestrutura própria. Ele exige apenas um User-Agent identificando o app
-// (política de uso do Nominatim) e um limite de ~1 requisição por segundo.
+// O Nominatim público não é usado para autocomplete: a política do serviço
+// não permite esse padrão de consultas conforme a pessoa digita. Sem Pelias,
+// as sugestões automáticas ficam indisponíveis, mas o endereço ainda pode ser
+// digitado manualmente. Uma busca pontual explícita (geocode) pode usar
+// Nominatim com cache e fila de no máximo uma chamada por segundo por processo.
 type NominatimResult = { display_name?: string; lat?: string; lon?: string; name?: string; address?: { city?: string; municipality?: string; town?: string; country_code?: string } };
 
-async function suggestAddressesViaNominatim(query: string): Promise<GeocodedPlace[]> {
-  const url = new URL("https://nominatim.openstreetmap.org/search");
-  url.searchParams.set("q", `${query}, São Paulo, SP, Brasil`);
-  url.searchParams.set("format", "jsonv2");
-  url.searchParams.set("addressdetails", "1");
-  url.searchParams.set("countrycodes", "br");
-  url.searchParams.set("viewbox", `${SPTRANS_SEARCH_BOUNDS.minLongitude},${SPTRANS_SEARCH_BOUNDS.maxLatitude},${SPTRANS_SEARCH_BOUNDS.maxLongitude},${SPTRANS_SEARCH_BOUNDS.minLatitude}`);
-  url.searchParams.set("bounded", "1");
-  url.searchParams.set("accept-language", "pt-BR");
-  url.searchParams.set("limit", "5");
-  const response = await fetchWithTimeout(url, { headers: { "User-Agent": "UrbicoApp/1.0 (projeto pessoal de mobilidade urbana)" } });
-  if (!response.ok) throw new Error(`O Nominatim respondeu com status ${response.status}.`);
-  const payload = (await response.json()) as NominatimResult[];
-  return payload
-    .map((item) => {
+const NOMINATIM_MIN_INTERVAL_MS = 1_100;
+const nominatimCache = new Map<string, GeocodedPlace | null>();
+let nominatimLastRequestAt = 0;
+let nominatimQueue: Promise<void> = Promise.resolve();
+
+async function geocodeViaNominatim(query: string): Promise<GeocodedPlace | null> {
+  const cacheKey = normalizeLocality(query);
+  if (nominatimCache.has(cacheKey)) return nominatimCache.get(cacheKey) ?? null;
+
+  const previous = nominatimQueue;
+  let release!: () => void;
+  const turn = new Promise<void>((resolve) => { release = resolve; });
+  nominatimQueue = previous.then(() => turn);
+  await previous;
+
+  try {
+    // Outra chamada idêntica pode ter preenchido o cache enquanto esta aguardava a fila.
+    if (nominatimCache.has(cacheKey)) return nominatimCache.get(cacheKey) ?? null;
+    const waitMs = Math.max(0, NOMINATIM_MIN_INTERVAL_MS - (Date.now() - nominatimLastRequestAt));
+    if (waitMs > 0) await new Promise<void>((resolve) => setTimeout(resolve, waitMs));
+    nominatimLastRequestAt = Date.now();
+
+    const url = new URL("https://nominatim.openstreetmap.org/search");
+    url.searchParams.set("q", `${query}, São Paulo, SP, Brasil`);
+    url.searchParams.set("format", "jsonv2");
+    url.searchParams.set("addressdetails", "1");
+    url.searchParams.set("countrycodes", "br");
+    url.searchParams.set("viewbox", `${SPTRANS_SEARCH_BOUNDS.minLongitude},${SPTRANS_SEARCH_BOUNDS.maxLatitude},${SPTRANS_SEARCH_BOUNDS.maxLongitude},${SPTRANS_SEARCH_BOUNDS.minLatitude}`);
+    url.searchParams.set("bounded", "1");
+    url.searchParams.set("accept-language", "pt-BR");
+    url.searchParams.set("limit", "1");
+    const response = await fetchWithTimeout(url, { headers: { "User-Agent": "UrbicoApp/1.0 (projeto pessoal de mobilidade urbana)" } });
+    if (!response.ok) throw new Error(`O Nominatim respondeu com status ${response.status}.`);
+    const payload = (await response.json()) as NominatimResult[];
+    const item = payload[0];
+    let place: GeocodedPlace | null = null;
+    if (item?.display_name) {
       const latitude = Number(item.lat);
       const longitude = Number(item.lon);
       const locality = item.address?.city ?? item.address?.municipality ?? item.address?.town;
-      // A caixa geográfica sozinha inclui municípios vizinhos. Exigimos que
-      // o resultado identifique São Paulo como município antes de o sugerir.
-      if (!locality || normalizeLocality(locality) !== "sao paulo") return null;
-      if (item.address?.country_code && item.address.country_code.toLowerCase() !== "br") return null;
-      if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || !item.display_name) return null;
-      return { name: item.name ?? item.display_name, address: item.display_name, latitude, longitude };
-    })
-    .filter((place): place is GeocodedPlace => place !== null && isWithinSptransSearchArea(place));
+      if (locality && normalizeLocality(locality) === "sao paulo"
+        && (!item.address?.country_code || item.address.country_code.toLowerCase() === "br")
+        && Number.isFinite(latitude) && Number.isFinite(longitude)) {
+        const candidate = { name: item.name ?? item.display_name, address: item.display_name, latitude, longitude };
+        if (isWithinSptransSearchArea(candidate)) place = candidate;
+      }
+    }
+    nominatimCache.set(cacheKey, place);
+    if (nominatimCache.size > 100) {
+      const oldestKey = nominatimCache.keys().next().value;
+      if (oldestKey !== undefined) nominatimCache.delete(oldestKey);
+    }
+    return place;
+  } finally {
+    release();
+  }
 }
 
 export async function suggestAddresses(query: string): Promise<GeocodedPlace[]> {
   if (query.trim().length < 2) return [];
-  const baseUrl = serviceUrl("PELIAS_BASE_URL");
-  if (baseUrl) {
-    try {
-      return await suggestAddressesViaPelias(query);
-    } catch {
-      // Pelias configurado mas fora do ar: cai para o Nominatim em vez de
-      // deixar a pessoa sem nenhuma sugestão.
-    }
+  if (!serviceUrl("PELIAS_BASE_URL")) return [];
+  try {
+    return await suggestAddressesViaPelias(query);
+  } catch {
+    // Sem Pelias saudável, não use o Nominatim público como autocomplete.
+    return [];
   }
-  return suggestAddressesViaNominatim(query);
 }
 
-export async function geocode(query: string) {
-  const places = await suggestAddresses(query);
-  return places[0] ?? null;
+export async function geocode(query: string): Promise<GeocodedPlace | null> {
+  if (query.trim().length < 2) return null;
+  if (serviceUrl("PELIAS_BASE_URL")) {
+    try {
+      const places = await suggestAddressesViaPelias(query);
+      if (places[0]) return places[0];
+    } catch {
+      // Busca pontual pode recorrer ao Nominatim com rate limit/cache.
+    }
+  }
+  try {
+    return await geocodeViaNominatim(query);
+  } catch {
+    return null;
+  }
 }
 
 export function decodeValhallaShape(shape: string, precision = 6): number[][] {
@@ -166,64 +202,13 @@ async function planWalkingRouteViaValhalla(origin: Coordinates, destination: Coo
   return { distanceMeters: Math.round(trip.summary.length * 1000), durationSeconds: Math.round(trip.summary.time), points: leg?.shape ? decodeValhallaShape(leg.shape) : [], instructions: (leg?.maneuvers ?? []).map((maneuver) => ({ text: maneuver.instruction ?? "Continue pela rota", distanceMeters: Math.round((maneuver.length ?? 0) * 1000), durationSeconds: Math.round(maneuver.time ?? 0) })) };
 }
 
-// FIX: assim como a geocodificação, o cálculo de rota a pé dependia de um
-// servidor Valhalla próprio (VALHALLA_BASE_URL) que normalmente não está
-// configurado — sem ele, `planWalkingRoute` sempre voltava `null`, e a tela
-// de Rotas mostrava "rota automática indisponível" mesmo com origem/destino
-// prontos. O OSRM tem um servidor de demonstração público e gratuito
-// (router.project-osrm.org) que cobre o mesmo caso de uso sem precisar de
-// infraestrutura própria — mesma lógica de fallback usada no geocode.
-type OsrmManeuver = { type?: string; modifier?: string };
-type OsrmStep = { distance?: number; duration?: number; name?: string; maneuver?: OsrmManeuver };
-type OsrmRoute = { distance?: number; duration?: number; geometry?: { coordinates?: [number, number][] }; legs?: Array<{ steps?: OsrmStep[] }> };
-type OsrmResponse = { code?: string; routes?: OsrmRoute[] };
-
-const OSRM_MODIFIER_TEXT: Record<string, string> = {
-  left: "Vire à esquerda", right: "Vire à direita",
-  "slight left": "Mantenha-se à esquerda", "slight right": "Mantenha-se à direita",
-  "sharp left": "Vire acentuadamente à esquerda", "sharp right": "Vire acentuadamente à direita",
-  straight: "Siga em frente", uturn: "Faça o retorno",
-};
-
-function describeOsrmStep(step: OsrmStep): string {
-  const streetSuffix = step.name ? ` em ${step.name}` : "";
-  const type = step.maneuver?.type;
-  const modifier = step.maneuver?.modifier;
-  if (type === "depart") return `Siga${streetSuffix || " em frente"}`;
-  if (type === "arrive") return "Você chegou ao destino";
-  if ((type === "roundabout" || type === "rotary") ) return `Entre na rotatória${streetSuffix}`;
-  if (modifier && OSRM_MODIFIER_TEXT[modifier]) return `${OSRM_MODIFIER_TEXT[modifier]}${streetSuffix}`;
-  return `Continue${streetSuffix || " pela via"}`;
-}
-
-async function planWalkingRouteViaOsrm(origin: Coordinates, destination: Coordinates): Promise<WalkingRoute | null> {
-  const url = new URL(`https://router.project-osrm.org/route/v1/foot/${origin.longitude},${origin.latitude};${destination.longitude},${destination.latitude}`);
-  url.searchParams.set("overview", "full");
-  url.searchParams.set("geometries", "geojson");
-  url.searchParams.set("steps", "true");
-  const response = await fetchWithTimeout(url, { headers: { "User-Agent": "UrbicoApp/1.0 (projeto pessoal de mobilidade urbana)" } });
-  if (!response.ok) throw new Error(`O roteador aberto (OSRM) respondeu com status ${response.status}.`);
-  const payload = (await response.json()) as OsrmResponse;
-  const route = payload.routes?.[0];
-  if (payload.code !== "Ok" || !route || typeof route.distance !== "number" || typeof route.duration !== "number") return null;
-  const steps = route.legs?.[0]?.steps ?? [];
-  return {
-    distanceMeters: Math.round(route.distance),
-    durationSeconds: Math.round(route.duration),
-    points: route.geometry?.coordinates ?? [],
-    instructions: steps.map((step) => ({ text: describeOsrmStep(step), distanceMeters: Math.round(step.distance ?? 0), durationSeconds: Math.round(step.duration ?? 0) })),
-  };
-}
-
+// Não use o OSRM público como fallback de caminhada: uma resposta HTTP 200
+// não comprova que o perfil pedestrian esteja habilitado. Sem Valhalla próprio
+// configurado, a rota a pé fica indisponível em vez de mostrar dados de carro.
 export async function planWalkingRoute(origin: Coordinates, destination: Coordinates): Promise<WalkingRoute | null> {
-  const baseUrl = serviceUrl("VALHALLA_BASE_URL");
-  if (baseUrl) {
-    try {
-      return await planWalkingRouteViaValhalla(origin, destination);
-    } catch {
-      // Valhalla configurado mas fora do ar: cai para o OSRM público em vez
-      // de deixar a viagem sem rota.
-    }
+  try {
+    return await planWalkingRouteViaValhalla(origin, destination);
+  } catch {
+    return null;
   }
-  return planWalkingRouteViaOsrm(origin, destination);
 }
