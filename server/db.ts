@@ -19,6 +19,22 @@ export async function getDb() {
   return _db;
 }
 
+/**
+ * Verifica conectividade real com MySQL para readiness/deploy.
+ * A criação lazy do cliente Drizzle, sozinha, não garante que o banco responda.
+ */
+export async function checkDatabaseConnection(): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  try {
+    await db.execute(sql`SELECT 1`);
+    return true;
+  } catch (error) {
+    console.warn("[Database] Readiness check failed:", error instanceof Error ? error.message : "unknown error");
+    return false;
+  }
+}
+
 export async function upsertUser(user: InsertUser): Promise<void> {
   if (!user.openId) {
     throw new Error("User openId is required for upsert");
