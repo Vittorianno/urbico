@@ -13,6 +13,12 @@ export const ENV = {
   // enviado pelo app é válido.
   supabaseUrl: process.env.SUPABASE_URL ?? "",
   supabaseAnonKey: process.env.SUPABASE_ANON_KEY ?? "",
+  // O Urbico só ativa a conta depois que o e-mail é confirmado pelo link.
+  // O Supabase já faz isso quando "Confirm email" está ligado no painel; esta
+  // flag é a segunda barreira, no servidor. Padrão: exigir. Defina
+  // SUPABASE_REQUIRE_EMAIL_CONFIRMATION=false apenas para desativar
+  // temporariamente (ex.: projeto Supabase ainda sem confirmação ligada).
+  requireEmailConfirmation: process.env.SUPABASE_REQUIRE_EMAIL_CONFIRMATION !== "false",
   // Segredo compartilhado para acionar o monitoramento de alertas de saída
   // via HTTP a partir de um cron externo (GitHub Actions, Vercel Cron etc.).
   // Opcional: o agendador interno (setInterval em server/_core/index.ts) já

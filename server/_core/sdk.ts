@@ -102,6 +102,19 @@ class SDKServer {
       throw ForbiddenError("Token do Supabase inválido ou expirado");
     }
 
+    // Requisito do produto: a conta só fica ativa depois que a pessoa clica no
+    // link de confirmação enviado por e-mail. Segunda barreira no servidor,
+    // caso a confirmação não esteja ligada no painel do Supabase.
+    if (
+      ENV.requireEmailConfirmation &&
+      !supabaseUser.email_confirmed_at &&
+      !supabaseUser.confirmed_at
+    ) {
+      throw ForbiddenError(
+        "E-mail ainda não confirmado. Abra o link enviado ao seu e-mail para ativar a conta.",
+      );
+    }
+
     const openId = `supabase:${supabaseUser.id}`;
     const name =
       (supabaseUser.user_metadata?.full_name as string | undefined) ||
