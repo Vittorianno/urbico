@@ -1,120 +1,78 @@
-# Urbico — Prontidão para produção (auditoria de 01/10/2026)
+# Urbico — prontidão para produção
 
-Auditoria feita por leitura direta do repositório (`main` @ `eb0a7a2`). Não foi
-possível rodar `pnpm check`, `pnpm test` nem o app nesse ambiente: **rode
-`pnpm check && pnpm test` localmente antes de fazer merge desta branch.**
+**Última validação:** 27/10/2026  
+**Commit validado:** `3fa039a` — `fix: explicit address geocoding and coordinate-safe saves`  
+**Status:** o código passa nas validações de build, mas o produto **ainda não está pronto para lançamento público**. Backend público, banco de produção, URLs de build e testes em dispositivo continuam pendentes.
 
-## O que foi corrigido nesta branch (`audit/hardening-producao`)
+## Estado validado do repositório
 
-| # | Problema encontrado | Correção |
-|---|---|---|
-| 1 | CORS refletia **qualquer** origem com `Allow-Credentials: true` e o cookie usa `SameSite=None` → qualquer site na web podia chamar o backend em nome do usuário logado | `server/_core/security.ts`: em produção só passam origens de `CORS_ALLOWED_ORIGINS` (e a própria origem do servidor). Dev continua como antes. App Android não envia `Origin` e não é afetado |
-| 2 | Nenhum rate limit; endpoints públicos (Norby, SPTrans, lotação, analytics) abertos a abuso e a esgotar a cota do token SPTrans | Limite por IP: 600 req/min em `/api/trpc`, 30 req/min em `/api/auth/session` |
-| 3 | `express.json({ limit: "50mb" })` sem necessidade | 1 MB |
-| 4 | Requisito "conta só ativa depois de confirmar o e-mail" dependia só de uma opção no painel do Supabase | Servidor recusa criar sessão se `email_confirmed_at` estiver vazio (`SUPABASE_REQUIRE_EMAIL_CONFIRMATION=false` desativa) |
-| 5 | Sem `SIGTERM` gracioso, sem `exit(1)` em falha de boot, sem aviso de config insegura | `index.ts` + `logSecurityWarnings()` |
-| 6 | Sem testes de segurança | `tests/security.test.ts` e `tests/hardening.test.ts` (sem rede) |
-| 7 | **Refresh token do Google Agenda gravado em texto puro** no MySQL | `server/_core/secret-box.ts` (AES-256-GCM, chave `TOKEN_ENCRYPTION_KEY`). `db.ts` grava criptografado e lê descriptografado; tokens legados em texto puro continuam legíveis. Em produção, sem a chave, recusa gravar. Se a chave for perdida/trocada, a pessoa precisa reconectar a agenda |
-| 8 | **Nenhuma chamada externa tinha timeout** (Ollama, SPTrans, Nominatim, OSRM, Pelias, Valhalla, Google) | `server/_core/http.ts` (`fetchWithTimeout`, 10 s padrão; Ollama 30 s) aplicado a todas |
-| 9 | **Norby não informava se respondeu via `llm` ou `fallback`** | `askNorbyDetailed()` devolve `{ message, engine, fallbackReason }` e registra `[norby] engine=...` no log. `askNorby()` mantém a assinatura antiga (o router tRPC não mudou) |
-| 10 | Não havia como verificar o Llama sem ler código | `GET /api/norby/status` → `{ configured, reachable, model, modelInstalled }` (consulta o `/api/tags` do Ollama; não expõe a URL) |
+Validação executada numa cópia limpa do `main`, sem usar nem sobrescrever as alterações locais do workspace de desenvolvimento.
 
-> O mecanismo (`engine`) ainda **não** chega ao app: para isso é preciso mudar
-> `norby.chat` em `server/routers.ts` para devolver o objeto de
-> `askNorbyDetailed`. Hoje ele aparece no log do servidor e no endpoint de status.
-
-### Novas variáveis de ambiente (acrescentar ao `.env.example`)
-
-| Variável | Para quê |
+| Verificação | Resultado |
 |---|---|
-| `CORS_ALLOWED_ORIGINS` | Origens web autorizadas em produção, separadas por vírgula. Vazio = nenhum site de outra origem (Android segue funcionando) |
-| `TRUST_PROXY` | Nº de proxies reversos na frente do servidor (padrão em produção: `1`). Necessário para o rate limit enxergar o IP real |
-| `SUPABASE_REQUIRE_EMAIL_CONFIRMATION` | `false` só para desativar temporariamente a exigência de e-mail confirmado |
-| `TOKEN_ENCRYPTION_KEY` | Chave para criptografar o refresh token do Google Agenda (`openssl rand -base64 32`). **Obrigatória em produção** se o Google Agenda estiver ligado. Guarde um backup: sem ela os tokens salvos ficam ilegíveis |
+| `pnpm install --frozen-lockfile` | passou |
+| `pnpm exec expo install --check` | passou — dependências compatíveis com Expo SDK 57 |
+| `pnpm check` | passou |
+| `pnpm lint` | passou; há um aviso não fatal de formato ESM no ESLint |
+| `pnpm exec vitest run` | **42 aprovados, 3 ignorados** |
+| `pnpm build` | passou |
+| `expo export --platform web` | passou |
+| `expo export --platform android` | passou — bundle JavaScript nativo gerado |
+| `expo prebuild --platform android --no-install` | passou |
+| GitHub Actions — CI | [passou no commit validado](https://github.com/Vittorianno/urbico/actions/runs/40446090431) |
+| GitHub Actions — secret scan | [passou no commit validado](https://github.com/Vittorianno/urbico/actions/runs/40446090463) |
 
-> ⚠️ Atenção ao fazer deploy: se o projeto Supabase estiver com *Confirm email*
-> desligado, o login por e-mail/senha passa a ser recusado pelo servidor até
-> você ligar essa opção no painel (ou definir a flag acima como `false`).
+**Limite importante:** export Android e `expo prebuild` não são um APK. O Codespace usado nesta validação não tem Java nem Android SDK; a compilação nativa ainda precisa ser feita por EAS Build ou num ambiente Android completo. Os testes também não substituem a validação num aparelho físico.
 
-## Verificar o Llama (você, no seu ambiente)
+## Correções já integradas
 
-```bash
-ollama list                                   # modelo llama3.2:3b instalado?
-curl -s http://127.0.0.1:11434/api/tags       # Ollama no ar?
-curl -s http://127.0.0.1:3000/api/norby/status  # o backend enxerga o modelo?
-# depois de uma conversa no app, o log do backend mostra:
-#   [norby] engine=llm model=llama3.2:3b      (ou engine=fallback reason=...)
-```
+- **Expo SDK 57:** dependências e lockfile alinhados com as versões compatíveis.
+- **Exportação web limpa:** o `metro.config.js` pré-cria o cache CSS necessário para evitar a falha de hash do `react-native-css-interop` em builds frios.
+- **Busca de endereços:** a ação explícita de busca pode geocodificar o texto; resultados desatualizados não são selecionados e coordenadas resolvidas são encaminhadas aos fluxos de rota/favoritos.
+- **Nominatim:** o serviço público não é usado para autocomplete contínuo. Sem Pelias, sugestões automáticas ficam indisponíveis; a pessoa pode digitar o endereço e pedir uma busca pontual.
+- **Caminhada:** o backend usa Valhalla com `costing: pedestrian`. Sem Valhalla ou em caso de falha, a rota a pé fica indisponível; OSRM público não é apresentado como rota pedestre.
+- **Autenticação e banco:** os testes verificam que a API retorna indisponibilidade explícita quando o MySQL não está acessível.
+- **Segurança:** limites de requisição, validação de CORS, timeouts externos, criptografia AES-256-GCM para tokens do Google Agenda e verificações de segredos estão integrados.
 
-O caminho físico do modelo só o Ollama sabe: `echo $OLLAMA_MODELS` (se vazio, o
-padrão do Ollama no usuário que o executa é `~/.ollama/models`).
+## Bloqueadores antes do lançamento
 
-> `127.0.0.1:11434` só é alcançável por um backend que rode **no mesmo aparelho**.
-> Um backend hospedado na nuvem não enxerga o Ollama do seu celular — decida entre
-> (a) Ollama num servidor próprio, (b) backend no mesmo aparelho, ou (c) produção
-> só com o fallback por regras.
+- [ ] **Hospedar o backend** num ambiente Node de processo contínuo, com HTTPS e domínio estável. O monitor de alertas usa um agendador interno; não assumir que uma hospedagem serverless o manterá ativo.
+- [ ] **Configurar MySQL de produção:** definir `DATABASE_URL`, executar `pnpm db:push` e validar `GET /api/ready`. Sem banco acessível, a API pode iniciar, mas login persistido, alertas e outros recursos dependentes de banco não funcionam.
+- [ ] **Configurar Supabase Auth:** `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY`; verificar confirmação de e-mail e o provedor Google no painel se for oferecer login Google. Definir `JWT_SECRET` aleatório e forte no backend.
+- [ ] **Configurar SPTrans:** fornecer `SPTRANS_TOKEN` válido apenas no servidor e confirmar dados reais de linhas/veículos.
+- [ ] **Definir as URLs de API em `eas.json`:** os perfis development, preview e production ainda contêm domínios de exemplo (`SEU-BACKEND-...`). Um app nativo gerado com esses valores não alcançará o backend real.
+- [ ] **Vincular o projeto Expo:** `app.config.ts` ainda não contém `extra.eas.projectId`. Executar `eas login` e `eas init` com a conta Expo pretendida antes do primeiro build EAS.
+- [ ] **Configurar CORS e proxy:** preencher `CORS_ALLOWED_ORIGINS` para as origens web reais e definir `TRUST_PROXY` de acordo com a topologia do proxy reverso.
+- [ ] **Decidir e provisionar geosserviços:** `PELIAS_BASE_URL` é necessário para sugestões automáticas; `VALHALLA_BASE_URL` é necessário para rotas a pé. Sem eles, as funcionalidades relacionadas ficam explicitamente indisponíveis. O limitador/cache do Nominatim é por processo; se houver várias instâncias do backend, usar limitador/cache compartilhado ou geocodificador próprio.
+- [ ] **Testar num aparelho real:** login/cadastro, GPS em segundo plano, notificações, reconhecimento/síntese de voz, MapLibre, rotas e integração SPTrans ponta a ponta.
+- [ ] **Revisar publicação na loja:** política de privacidade pública, justificativa de localização em segundo plano e microfone, permissões Android, identidade de push/Firebase se notificações remotas forem necessárias e IDs reais do AdMob se forem ativados anúncios de produção.
 
-## Não commitado: workflow de CI
+## Configuração do Google Agenda (opcional)
 
-A integração do GitHub usada na auditoria não tem permissão para criar
-arquivos em `.github/workflows/`. Crie você mesmo `.github/workflows/ci.yml`:
+Só preencher se a integração de agenda for oferecida:
 
-```yaml
-name: CI
-on: [push, pull_request]
-jobs:
-  verify:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: 20, cache: pnpm }
-      # Sem pnpm-lock.yaml no repo (ver bloqueador 3); depois de commitá-lo, use --frozen-lockfile
-      - run: pnpm install --no-frozen-lockfile
-      - run: pnpm check
-      - run: pnpm test
-        env:
-          SPTRANS_TOKEN: ${{ secrets.SPTRANS_TOKEN }}
-```
+- `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` e `GOOGLE_REDIRECT_URI` no backend.
+- `TOKEN_ENCRYPTION_KEY` aleatória e persistente (por exemplo, gerar com `openssl rand -base64 32`). Perder/trocar a chave exige que as pessoas reconectem a agenda.
+- Registrar a URI de callback exata no Google Cloud Console.
 
-## O que ainda falta para 100% (exige ação sua — não dá para fazer por commit)
+O login Google do Urbico é uma configuração separada, feita no provedor Google dentro do Supabase.
 
-**Bloqueadores de lançamento**
+## Infraestrutura e custos
 
-1. **Hospedar o backend** (Node contínuo, não serverless, por causa do agendador de alertas de 60 s) e definir `EXPO_PUBLIC_API_BASE_URL`. Em `eas.json` as 3 URLs ainda são `SEU-BACKEND-...exemplo.com`: um APK gerado hoje não consegue falar com nenhum servidor.
-2. **Banco MySQL gerenciado** + `DATABASE_URL` e rodar `pnpm db:push`. Sem banco: sem login salvo, sem alertas, sem lotação.
-3. **Gerar e commitar `pnpm-lock.yaml`** (`pnpm install` na raiz). Hoje não há lockfile no repositório: builds do EAS/CI não são reprodutíveis e o README já presume que ele existe.
-4. **`eas init`** para gravar o `projectId` em `app.config.ts` (`extra.eas`) antes do primeiro `eas build`.
-5. **Painel do Supabase**: ligar *Confirm email*, habilitar provedor Google (se usar "Continuar com Google") e cadastrar a *Redirect URL* do esquema `urbico://`. Depois do 1º cadastro real, preencher `OWNER_OPEN_ID` para existir um admin.
-6. **Variáveis de produção**: `JWT_SECRET` (≥ 32 caracteres), `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SPTRANS_TOKEN`, `TOKEN_ENCRYPTION_KEY`, `CORS_ALLOWED_ORIGINS` (se houver cliente web).
-7. **Validar em dispositivo real** (pendência aberta no `todo.md`): GPS em segundo plano, reconhecimento de voz, notificações, MapLibre, SPTrans ponta a ponta.
+- O backend MySQL e os serviços geográficos são componentes separados.
+- Pelias/Valhalla com dados geográficos podem exceder a memória de uma VM de 1 GB; não instalar ambos nessa VM sem antes dimensionar e medir o consumo. Para manter custo baixo, pode-se lançar inicialmente com busca manual/uma busca pontual e sem rota a pé, deixando a indisponibilidade explícita.
+- O Norby usa respostas locais por regras quando `OLLAMA_BASE_URL`/`OLLAMA_MODEL` não estão configurados. Um backend na nuvem não consegue acessar o Ollama que roda apenas no celular ou notebook do usuário.
+- Não há comprovação de deploy de produção concluído nesta auditoria. A conectividade SSH ao servidor Oracle e a configuração de credenciais ainda precisam ser resolvidas antes de implantar.
 
-**Serviços públicos usados como fallback (revisar antes de escalar)**
+## Riscos técnicos a acompanhar
 
-- **Nominatim público**: a política de uso proíbe autocomplete e limita a ~1 req/s. Para produção, subir um Pelias próprio (`PELIAS_BASE_URL`) ou usar um provedor contratado.
-- **OSRM de demonstração** (`router.project-osrm.org`): até onde sei, hospeda só o perfil de carro e ignora o `/foot/` da URL, então tempos de caminhada podem estar errados. Teste (`curl` de um trajeto curto e compare com a distância/tempo a pé esperado) e, se confirmado, suba um Valhalla próprio (`VALHALLA_BASE_URL`, perfil `pedestrian`).
-- **Roteamento multimodal não existe**: o backend só tem `routing.planWalking` (a pé). Não há `planRoute` no servidor.
+- Rate limits atuais são em memória e por processo; não coordenam múltiplas réplicas.
+- O secret scan do CI verifica os arquivos versionados, não substitui auditoria do histórico Git. Se um segredo já foi commitado, rotacioná-lo; não basta apagá-lo do último commit.
+- Os três testes ignorados devem ser revisados para confirmar se continuam intencionalmente condicionais e não escondem regressões.
+- O sucesso de CI/build não comprova a disponibilidade real do Supabase, MySQL, SPTrans, Pelias, Valhalla ou do backend em produção.
 
-**Pendências do `todo.md`**
+## Endpoints operacionais
 
-- `[ ]` Push com Firebase — só é necessário se quiser notificações com o app fechado; hoje as notificações são locais.
-- `[ ]` Hospedagem contínua para o monitoramento — é o item 1 acima.
-- `[ ]` Validar recursos nativos em dispositivo — item 7.
-- `[ ]` *Autocomplete do Google Places* e `[ ]` *ElevenLabs* estão **obsoletos**: ambos foram substituídos (Pelias/Nominatim e voz local) e já marcados como `[x]` mais abaixo. Podem ser riscados.
-
-**Antes de publicar na Play Store**
-
-- Política de privacidade pública (obrigatória por usar localização em segundo plano e microfone) e a declaração de uso de `ACCESS_BACKGROUND_LOCATION` no Play Console.
-- Trocar os IDs de teste do AdMob (`EXPO_PUBLIC_ADMOB_*`) pelos reais.
-- Revisar plugins que parecem sobras do template: `expo-video` (reprodução em segundo plano / PiP) e `expo-audio` (texto de permissão em inglês). Se o app não usa vídeo, remover reduz permissões e superfície de revisão.
-- Cor de fundo da *splash* está `#ffffff` no modo claro enquanto o app é só tema escuro.
-
-**Riscos conhecidos, não alterados aqui (decisão de produto/arquitetura)**
-
-- Sessão do Urbico dura 1 ano e não há revogação no servidor (logout só limpa o cookie/token local).
-- `crowdReports.submit`, `analytics.track` e `norby.chat` são públicos; o rate limit por IP mitiga mas não impede envenenamento dos dados de lotação. Considerar exigir login ou assinatura do dispositivo para relatos.
-- `departureAlerts.*` identifica o dispositivo só pelo `installationId` (UUID); quem souber o UUID controla o alerta.
-- O `state` do OAuth do Google usa o mesmo `JWT_SECRET` da sessão, sem separação de tipo (risco baixo).
-- Arquivos legados do Manus em `server/_core/` (listados no README) seguem no repositório; remover só após `grep` local.
-- Painel admin está dentro do app (rota restrita a `admin`); a decisão original era um painel separado.
+- `GET /api/health`: liveness do processo.
+- `GET /api/ready`: readiness; só deve retornar pronto quando o MySQL responder.
+- `GET /api/norby/status`: diagnóstico do Norby/Ollama sem expor a URL do serviço.
