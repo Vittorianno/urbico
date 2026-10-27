@@ -1,6 +1,7 @@
 import { SignJWT, jwtVerify } from "jose";
 
 import { ENV } from "../_core/env";
+import { fetchWithTimeout } from "../_core/http";
 
 const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
@@ -69,7 +70,7 @@ type GoogleTokenResponse = { access_token: string; refresh_token?: string; expir
 export async function exchangeGoogleAuthCode(code: string): Promise<GoogleTokenResponse> {
   requireGoogleConfig();
   const body = new URLSearchParams({ code, client_id: ENV.googleClientId, client_secret: ENV.googleClientSecret, redirect_uri: ENV.googleRedirectUri, grant_type: "authorization_code" });
-  const response = await fetch(GOOGLE_TOKEN_URL, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body });
+  const response = await fetchWithTimeout(GOOGLE_TOKEN_URL, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body });
   if (!response.ok) throw new Error(`Google recusou a troca do código de autorização (status ${response.status}).`);
   return (await response.json()) as GoogleTokenResponse;
 }
@@ -77,7 +78,7 @@ export async function exchangeGoogleAuthCode(code: string): Promise<GoogleTokenR
 export async function refreshGoogleAccessToken(refreshToken: string): Promise<string> {
   requireGoogleConfig();
   const body = new URLSearchParams({ refresh_token: refreshToken, client_id: ENV.googleClientId, client_secret: ENV.googleClientSecret, grant_type: "refresh_token" });
-  const response = await fetch(GOOGLE_TOKEN_URL, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body });
+  const response = await fetchWithTimeout(GOOGLE_TOKEN_URL, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body });
   if (!response.ok) throw new Error(`Não foi possível renovar o acesso ao Google Agenda (status ${response.status}). A pessoa provavelmente precisa reconectar.`);
   const payload = (await response.json()) as GoogleTokenResponse;
   return payload.access_token;
@@ -92,7 +93,7 @@ export type GoogleCalendarEvent = { id: string; summary?: string; start?: { date
 const eventsUrl = (calendarId: string) => `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`;
 
 async function calendarRequest(accessToken: string, url: string, init: RequestInit = {}): Promise<unknown> {
-  const response = await fetch(url, { ...init, headers: { ...init.headers, Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" } });
+  const response = await fetchWithTimeout(url, { ...init, headers: { ...init.headers, Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" } });
   if (!response.ok) throw new Error(`O Google Agenda respondeu com status ${response.status}.`);
   if (response.status === 204) return null;
   return response.json();
