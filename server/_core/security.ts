@@ -23,10 +23,13 @@ export function parseAllowedOrigins(raw: string | undefined = process.env.CORS_A
     .filter((origin) => origin.length > 0);
 }
 
-function isSameHost(origin: string, hostHeader: string | undefined): boolean {
+function isSameOrigin(origin: string, req: Request): boolean {
+  const hostHeader = req.headers.host;
   if (!hostHeader) return false;
   try {
-    return new URL(origin).host === hostHeader;
+    const parsed = new URL(origin);
+    const expectedProtocol = req.protocol === "https" ? "https:" : "http:";
+    return parsed.host === hostHeader && parsed.protocol === expectedProtocol;
   } catch {
     return false;
   }
@@ -47,7 +50,7 @@ export function createCorsMiddleware(options: CorsOptions = {}): RequestHandler 
       !origin ||
       !isProduction ||
       allowedOrigins.includes(origin.replace(/\/+$/, "")) ||
-      isSameHost(origin, req.headers.host);
+      isSameOrigin(origin, req);
 
     if (origin && !permitted) {
       // Origem de navegador não autorizada: nem preflight nem requisição real.
