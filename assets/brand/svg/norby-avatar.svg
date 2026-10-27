@@ -1,24 +1,32 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400">
   <defs>
-    <linearGradient id="avatarBg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#1B2540"/>
-      <stop offset="100%" stop-color="#0B0F1A"/>
+    <linearGradient id="shell" x1="0" y1="0" x2="0.9" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#DCE8F7"/>
     </linearGradient>
-    <linearGradient id="ring" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#2F7FF5"/>
-      <stop offset="100%" stop-color="#3ED6D1"/>
+    <linearGradient id="navy" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#102D53"/>
+      <stop offset="1" stop-color="#06162D"/>
+    </linearGradient>
+    <linearGradient id="blue" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#36B8FF"/>
+      <stop offset="1" stop-color="#1268D8"/>
     </linearGradient>
   </defs>
-  <circle cx="100" cy="100" r="98" fill="url(#avatarBg)" stroke="url(#ring)" stroke-width="4"/>
-  <!-- head -->
-  <rect x="46" y="56" width="108" height="92" rx="40" fill="none" stroke="url(#ring)" stroke-width="10"/>
-  <rect x="30" y="88" width="16" height="42" rx="8" fill="#2F7FF5"/>
-  <rect x="154" y="88" width="16" height="42" rx="8" fill="#2F7FF5"/>
-  <!-- eyes -->
-  <circle cx="82" cy="100" r="11" fill="#3ED6D1"/>
-  <circle cx="118" cy="100" r="11" fill="#3ED6D1"/>
-  <!-- smile -->
-  <path d="M78 122c6 8 15 12 22 12s16-4 22-12" stroke="#EAF2FF" stroke-width="7" stroke-linecap="round" fill="none"/>
-  <!-- status dot -->
-  <circle cx="158" cy="150" r="12" fill="#22C55E" stroke="#0B0F1A" stroke-width="4"/>
+  <circle cx="200" cy="200" r="194" fill="#071A33"/>
+  <circle cx="200" cy="200" r="181" fill="none" stroke="#1D4B80" stroke-width="5"/>
+  <path d="M200 36 Q200 18 215 18 Q231 18 231 35 L225 75 L205 75Z" fill="url(#blue)"/>
+  <circle cx="215" cy="19" r="16" fill="#55C9FF"/>
+  <path d="M85 124 Q85 80 130 80 H270 Q315 80 315 125 V242 Q315 275 285 292 L200 337 L115 292 Q85 275 85 242Z" fill="url(#shell)" stroke="#B8D0EE" stroke-width="5"/>
+  <path d="M104 132 Q104 101 137 101 H263 Q296 101 296 134 V231 Q296 258 272 271 L200 309 L128 271 Q104 258 104 231Z" fill="url(#navy)" stroke="#2A5A91" stroke-width="5"/>
+  <circle cx="71" cy="197" r="31" fill="url(#blue)" stroke="#CDEAFF" stroke-width="5"/>
+  <circle cx="71" cy="197" r="14" fill="#0A2447"/>
+  <circle cx="329" cy="197" r="31" fill="url(#blue)" stroke="#CDEAFF" stroke-width="5"/>
+  <circle cx="329" cy="197" r="14" fill="#0A2447"/>
+  <path d="M145 183 Q163 157 181 183" fill="none" stroke="#68D9FF" stroke-width="13" stroke-linecap="round"/>
+  <path d="M219 183 Q237 157 255 183" fill="none" stroke="#68D9FF" stroke-width="13" stroke-linecap="round"/>
+  <path d="M164 220 Q200 254 236 220" fill="none" stroke="#FFFFFF" stroke-width="13" stroke-linecap="round"/>
+  <path d="M177 319 L223 319" stroke="#FFFFFF" stroke-width="8" stroke-linecap="round"/>
+  <path d="M200 324 C180 324 171 338 171 353 C171 375 200 393 200 393 C200 393 229 375 229 353 C229 338 220 324 200 324Z" fill="url(#blue)" stroke="#FFFFFF" stroke-width="4"/>
+  <circle cx="200" cy="352" r="10" fill="#FFFFFF"/>
 </svg>
