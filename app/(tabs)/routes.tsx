@@ -70,21 +70,23 @@ export default function RoutesScreen() {
     analytics.track("route_selected", { lineId: line.id, lineLabel: line.label });
   };
 
-  const start = async () => {
-    if (!ready) return;
+  const start = async (selectedDestination?: AddressSuggestion) => {
+    const effectiveDestination = selectedDestination?.address ?? destination;
+    const effectiveDestinationPlace = selectedDestination ?? destinationPlace;
+    if (!origin.trim() || !effectiveDestination.trim()) return;
     setRouteError(null);
     // FIX (analytics): route_search no momento em que a pessoa efetivamente
     // pede pra calcular a rota (não a cada tecla digitada) — ver
     // docs/analytics.md.
-    analytics.track("route_search", { hasCoordinates: Boolean(originPlace && destinationPlace), hasLine: Boolean(selectedLine) });
+    analytics.track("route_search", { hasCoordinates: Boolean(originPlace && effectiveDestinationPlace), hasLine: Boolean(selectedLine) });
     try {
       const result = await routeMutation.mutateAsync({
         origin,
-        destination,
+        destination: effectiveDestination,
         originLatitude: originPlace?.latitude,
         originLongitude: originPlace?.longitude,
-        destinationLatitude: destinationPlace?.latitude,
-        destinationLongitude: destinationPlace?.longitude,
+        destinationLatitude: effectiveDestinationPlace?.latitude,
+        destinationLongitude: effectiveDestinationPlace?.longitude,
       });
       if (!result?.route) {
         setRouteError(
@@ -114,7 +116,7 @@ export default function RoutesScreen() {
     <ScreenContainer>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         <View style={styles.top}><Pressable onPress={() => router.back()} style={({ pressed }) => [styles.back, pressed && styles.pressed]}><MaterialIcons name="arrow-back" size={22} color={colors.text} /></Pressable><Text style={styles.title}>Rotas</Text><MaterialIcons name="more-vert" size={23} color={colors.text} /></View>
-        <View style={styles.form}><View style={styles.addressLabelRow}><Text style={styles.fieldLabel}>De</Text><AddressAutocomplete value={origin} onChangeText={(text) => { setOrigin(text); setOriginPlace(null); }} onSelect={(place) => { setOriginPlace(place); setOrigin(place.address); }} placeholder={locatingOrigin ? "Localizando..." : "Minha localização ou endereço"} compact /></View><View style={styles.divider} /><View style={styles.addressLabelRow}><Text style={styles.fieldLabel}>Para</Text><AddressAutocomplete value={destination} onChangeText={(text) => { setDestination(text); setDestinationPlace(null); }} onSelect={(place) => { setDestinationPlace(place); setDestination(place.address); }} onSubmit={() => void start()} placeholder="Digite um endereço" compact /></View><Pressable onPress={() => { const previousOrigin = origin; const previousDestination = destination; const previousOriginPlace = originPlace; setOrigin(previousDestination); setDestination(previousOrigin); setOriginPlace(destinationPlace); setDestinationPlace(previousOriginPlace); }} style={({ pressed }) => [styles.swap, pressed && styles.pressed]}><MaterialIcons name="swap-vert" size={19} color={colors.text} /></Pressable></View>
+        <View style={styles.form}><View style={styles.addressLabelRow}><Text style={styles.fieldLabel}>De</Text><AddressAutocomplete value={origin} onChangeText={(text) => { setOrigin(text); setOriginPlace(null); }} onSelect={(place) => { setOriginPlace(place); setOrigin(place.address); }} placeholder={locatingOrigin ? "Localizando..." : "Minha localização ou endereço"} compact /></View><View style={styles.divider} /><View style={styles.addressLabelRow}><Text style={styles.fieldLabel}>Para</Text><AddressAutocomplete value={destination} onChangeText={(text) => { setDestination(text); setDestinationPlace(null); }} onSelect={(place) => { setDestinationPlace(place); setDestination(place.address); }} onSubmit={(selected) => void start(selected)} placeholder="Digite um endereço" compact /></View><Pressable onPress={() => { const previousOrigin = origin; const previousDestination = destination; const previousOriginPlace = originPlace; setOrigin(previousDestination); setDestination(previousOrigin); setOriginPlace(destinationPlace); setDestinationPlace(previousOriginPlace); }} style={({ pressed }) => [styles.swap, pressed && styles.pressed]}><MaterialIcons name="swap-vert" size={19} color={colors.text} /></Pressable></View>
         {originError ? <Text style={styles.originError}>{originError} Informe a origem manualmente.</Text> : null}
         {routeError ? <Text accessibilityRole="alert" style={styles.originError}>{routeError}</Text> : null}
         {lineSearch.data?.length ? <View style={styles.lineResults}><Text style={styles.resultLabel}>Linha para acompanhar no mapa</Text><FlatList data={lineSearch.data.slice(0, 3)} scrollEnabled={false} keyExtractor={(item) => String(item.id)} renderItem={({ item }) => <Pressable onPress={() => selectLine(item)} style={({ pressed }) => [styles.lineResult, selectedLine?.id === item.id && styles.lineSelected, pressed && styles.pressed]}><MaterialIcons name="directions-bus" size={18} color={colors.blue} /><View style={{ flex: 1 }}><Text style={styles.lineName}>{item.label} · {item.destination}</Text><Text style={styles.lineMeta}>{item.origin}</Text><View style={styles.lineCrowd}><CrowdLevelBadge level={crowdBatchQuery.data?.[item.id]?.level ?? null} compact /></View></View>{selectedLine?.id === item.id ? <MaterialIcons name="check-circle" size={19} color={colors.cyan} /> : null}</Pressable>} /></View> : null}

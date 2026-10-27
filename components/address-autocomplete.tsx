@@ -17,7 +17,7 @@ type AddressAutocompleteProps = {
   onChangeText: (value: string) => void;
   onSelect: (suggestion: AddressSuggestion) => void;
   placeholder?: string;
-  onSubmit?: () => void;
+  onSubmit?: (selected: AddressSuggestion) => void;
   compact?: boolean;
 };
 
@@ -52,8 +52,9 @@ export function AddressAutocomplete({
   const handleSearch = async () => {
     setSearchMessage(null);
     if (hasCurrentSuggestions && suggestions.data?.[0]) {
-      onSelect(suggestions.data[0]);
-      onSubmit?.();
+      const selected = suggestions.data[0];
+      onSelect(selected);
+      onSubmit?.(selected);
       return;
     }
     if (value.trim().length < 2) {
@@ -64,7 +65,7 @@ export function AddressAutocomplete({
     const result = await geocodeResult.refetch();
     if (result.data) {
       onSelect(result.data);
-      onSubmit?.();
+      onSubmit?.(result.data);
       return;
     }
     setSearchMessage(
@@ -123,7 +124,7 @@ export function AddressAutocomplete({
           style={styles.results}
           renderItem={({ item }) => (
             <Pressable
-              onPress={() => { onSelect(item); onSubmit?.(); }}
+              onPress={() => { onSelect(item); onSubmit?.(item); }}
               style={({ pressed }) => [styles.result, pressed && styles.pressed]}
             >
               <MaterialIcons name="place" size={17} color={colors.blue} />

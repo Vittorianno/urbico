@@ -72,12 +72,13 @@ export default function AgendaScreen() {
       );
     } catch (error) { Alert.alert("Alerta não ativado", error instanceof Error ? error.message : "Não foi possível preparar o alerta de saída."); }
   };
-  const save = () => {
+  const save = (selectedPlace?: AddressSuggestion) => {
     if (!title.trim() || !date.trim() || !time.trim() || !address.trim()) return;
-    const appointment = { title: title.trim(), date: date.trim(), time: time.trim(), address: address.trim(), latitude: place?.latitude, longitude: place?.longitude, relevantLineId: line?.id, relevantLineLabel: line?.label, alertsEnabled: Boolean(line && place) };
+    const effectivePlace = selectedPlace ?? place;
+    const appointment = { title: title.trim(), date: date.trim(), time: time.trim(), address: effectivePlace?.address ?? address.trim(), latitude: effectivePlace?.latitude, longitude: effectivePlace?.longitude, relevantLineId: line?.id, relevantLineLabel: line?.label, alertsEnabled: Boolean(line && effectivePlace) };
     const appointmentId = addAppointment(appointment);
-    analytics.track("calendar_event_created", { hasLine: Boolean(line), hasCoordinates: Boolean(place) });
-    if (line && place) Alert.alert("Ativar alerta de saída?", "Com sua permissão, o Urbico enviará atualizações de localização ao servidor enquanto este alerta estiver ativo. Você poderá revogar a qualquer momento.", [{ text: "Agora não", style: "cancel" }, { text: "Ativar alerta", onPress: () => void armAlert({ title: appointment.title, date: appointment.date, time: appointment.time, latitude: place.latitude, longitude: place.longitude, lineId: line.id }) }]);
+    analytics.track("calendar_event_created", { hasLine: Boolean(line), hasCoordinates: Boolean(effectivePlace) });
+    if (line && effectivePlace) Alert.alert("Ativar alerta de saída?", "Com sua permissão, o Urbico enviará atualizações de localização ao servidor enquanto este alerta estiver ativo. Você poderá revogar a qualquer momento.", [{ text: "Agora não", style: "cancel" }, { text: "Ativar alerta", onPress: () => void armAlert({ title: appointment.title, date: appointment.date, time: appointment.time, latitude: effectivePlace.latitude, longitude: effectivePlace.longitude, lineId: line.id }) }]);
     // Melhor esforço, sem nenhuma UI: se a conta Google já estiver conectada
     // (feita e visível só no Perfil), o compromisso é replicado por trás.
     // Falha aqui nunca impede o compromisso de ficar salvo no Urbico.

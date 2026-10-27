@@ -20,8 +20,9 @@ export default function FavoritesScreen() {
   // continua funcionando como "adicionar novo local", igual antes.
   const [editingId, setEditingId] = useState<string | null>(null);
   const resetForm = () => { setLabel(""); setAddress(""); setPlace(null); setEditingId(null); };
-  const save = () => {
+  const save = (selectedPlace?: AddressSuggestion) => {
     if (!label.trim() || !address.trim()) return;
+    const effectivePlace = selectedPlace ?? place;
     // FIX: antes dava pra salvar um favorito sem coordenadas (bastava digitar
     // texto e apertar salvar, sem tocar numa sugestão da lista). Esse
     // favorito ficava com endereço preenchido mas sem lat/lng, e por isso
@@ -29,11 +30,11 @@ export default function FavoritesScreen() {
     // sempre voltava pra este formulário em vez de ir direto pra rota. Agora
     // é obrigatório escolher um endereço da lista de sugestões antes de
     // salvar.
-    if (!place) {
-      Alert.alert("Escolha um endereço da lista", "Toque em uma das sugestões que aparecem abaixo do campo de endereço. Isso é necessário para o Urbico calcular a rota até este local.");
+    if (!effectivePlace) {
+      Alert.alert("Localização não confirmada", "Toque em Buscar endereço e aguarde a confirmação das coordenadas para salvar este local.");
       return;
     }
-    const patch = { label: label.trim(), address: address.trim(), latitude: place.latitude, longitude: place.longitude };
+    const patch = { label: label.trim(), address: effectivePlace.address, latitude: effectivePlace.latitude, longitude: effectivePlace.longitude };
     if (editingId) updateFavorite(editingId, patch);
     else { addFavorite(patch); analytics.track("favorite_added", { label: patch.label }); }
     resetForm();
