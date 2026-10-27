@@ -1,6 +1,23 @@
 const { getDefaultConfig } = require("expo/metro-config");
 const { withNativeWind } = require("nativewind/metro");
 
+const fs = require("node:fs");
+const path = require("node:path");
+
+// Metro may resolve this generated file before css-interop writes it during
+// getTransformOptions. Pre-create it so a clean production export can hash it.
+const cssInteropWebCache = path.join(
+  __dirname,
+  "node_modules",
+  "react-native-css-interop",
+  ".cache",
+  "web.css",
+);
+fs.mkdirSync(path.dirname(cssInteropWebCache), { recursive: true });
+if (!fs.existsSync(cssInteropWebCache)) {
+  fs.writeFileSync(cssInteropWebCache, "");
+}
+
 const config = getDefaultConfig(__dirname);
 
 // Defensive setting for pnpm-managed node_modules: even with
