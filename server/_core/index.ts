@@ -2,6 +2,7 @@ import "dotenv/config";
 import express from "express";
 import { createServer } from "http";
 import net from "net";
+import { checkDatabaseConnection } from "../db";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
 import { registerGoogleCalendarRoutes } from "./google-calendar-routes";
@@ -104,6 +105,17 @@ async function startServer() {
 
   app.get("/api/health", (_req, res) => {
     res.json({ ok: true, timestamp: Date.now() });
+  });
+
+  // Readiness difere de liveness: só retorna 200 se MySQL responder de verdade.
+  // O endpoint /api/health continua indicando apenas que o processo está vivo.
+  app.get("/api/ready", async (_req, res) => {
+    const databaseReady = await checkDatabaseConnection();
+    if (!databaseReady) {
+      res.status(503).json({ ok: false, checks: { database: "unavailable" } });
+      return;
+    }
+    res.json({ ok: true, checks: { database: "ready" } });
   });
 
   // Estado REAL do Ollama (configurado? alcançável? modelo instalado?) —
