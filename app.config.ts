@@ -42,6 +42,12 @@ const GOOGLE_TEST_IOS_APP_ID = "ca-app-pub-3940256099942544~1458002511";
 const config: ExpoConfig = {
   name: env.appName,
   slug: env.appSlug,
+  owner: "vittorianno",
+  extra: {
+    eas: {
+      projectId: "acb2f9e2-a9e6-4502-b0c0-1e7c27566e82",
+    },
+  },
   version: "1.0.0",
   orientation: "portrait",
   icon: "./assets/images/icon.png",
