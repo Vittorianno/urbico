@@ -30,6 +30,13 @@ import {
 const DEFAULT_WEB_INSETS: EdgeInsets = { top: 0, right: 0, bottom: 0, left: 0 };
 const DEFAULT_WEB_FRAME: Rect = { x: 0, y: 0, width: 0, height: 0 };
 
+// FIX (modo visitante): o guard NÃO força mais login. Mapa, linhas, rotas,
+// horários e Norby (consultas públicas) funcionam sem conta — o backend já
+// separa publicProcedure (público, com rate limit) de protectedProcedure
+// (favoritos/agenda sincronizados, Google Agenda etc.), e é ele quem decide
+// o acesso; a interface não é a barreira. A conta é pedida só quando a
+// pessoa escolhe entrar (Perfil → "Fazer login"). Único redirecionamento
+// que sobra: quem já está autenticado não precisa ver a tela de login.
 function AuthGuard() {
   const pathname = usePathname();
   const { loading, isAuthenticated } = useAuth();
@@ -39,12 +46,12 @@ function AuthGuard() {
     if (loading) return;
     if (isAuthenticated && isLoginRoute) {
       router.replace("/(tabs)");
-    } else if (!isAuthenticated && !isLoginRoute) {
-      router.replace("/login");
     }
   }, [isAuthenticated, isLoginRoute, loading]);
 
-  if (!loading) return null;
+  // O indicador de carregamento cobre só a tela de login (concluindo a
+  // sessão); o restante do app abre direto, sem esperar a checagem de sessão.
+  if (!loading || !isLoginRoute) return null;
   return (
     <View
       style={{
