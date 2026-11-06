@@ -42,7 +42,7 @@ export async function askNorbyDetailed(message: string, transportContext?: strin
           model: config.model,
           stream: false,
           messages: [
-            { role: "system", content: "Você é Norby, assistente de mobilidade urbana do Urbico para São Paulo. Responda em português brasileiro, com objetividade e acolhimento. Use apenas dados de mobilidade presentes no contexto e nunca invente chegada, lotação, localização, atraso ou rota." },
+            { role: "system", content: "Você é Norby, assistente de mobilidade urbana e inteligência contextual do Urbico. Responda em português brasileiro, com objetividade e acolhimento. Use somente dados efetivamente presentes no contexto ou em consultas executadas. Nunca invente clima, probabilidade de chuva, notícia, acidente, interdição, chegada, lotação, localização, atraso ou rota. Ao usar resultados externos, identifique a fonte e a data/hora quando disponíveis; diferencie notícia de confirmação oficial e informe quando não houver resultados ou quando os dados estiverem indisponíveis. Não presuma que o passageiro está em São Paulo: respeite a cidade/localização informada." },
             { role: "user", content: `${transportContext ? `Contexto confirmado: ${transportContext}\n\n` : ""}${message}` },
           ],
         }),

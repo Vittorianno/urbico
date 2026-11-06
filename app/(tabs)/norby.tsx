@@ -30,7 +30,7 @@ const prompts = [
 
 
 export default function NorbyScreen() {
-  const { messages, sendMessage, addNorbyMessage, clearMessages, addCrowdReport, voiceEnabled, activeRoute, startTrip, favorites } = useUrbico();
+  const { messages, sendMessage, addNorbyMessage, clearMessages, addCrowdReport, voiceEnabled, activeRoute, currentLocation, startTrip, favorites } = useUrbico();
   const [draft, setDraft] = useState("");
   const [isListening, setIsListening] = useState(false);
   const [showConversation, setShowConversation] = useState(true);
@@ -39,6 +39,9 @@ export default function NorbyScreen() {
   const completedTurnRef = useRef(false);
   const listeningRef = useRef(false);
   const chatMutation = trpc.norby.chat.useMutation();
+  const weatherMutation = trpc.norby.weather.useMutation();
+  const webSearchMutation = trpc.norby.search.useMutation();
+  const occurrencesMutation = trpc.norby.occurrences.useMutation();
   const crowdSubmitMutation = trpc.crowdReports.submit.useMutation();
   const activeLineId = activeRoute?.line?.id;
   const liveLineVehicles = trpc.transit.lineVehicles.useQuery(
@@ -95,6 +98,85 @@ export default function NorbyScreen() {
         status,
         durationMs: Date.now() - startedAt,
       });
+
+    const asksWeather = /clima|tempo agora|previs[aã]o do tempo|vai chover|chance de chuva|temperatura|est[aá] chovendo/.test(message.toLowerCase());
+    if (asksWeather) {
+      if (!currentLocation) {
+        const reply = "Para consultar o clima da sua região, preciso da sua localização. Ative a permissão de localização do Urbico e tente novamente.";
+        addNorbyMessage(reply);
+        if (voiceEnabled) void speakNorby(reply);
+        trackCommand("failure");
+        return;
+      }
+      try {
+        const weather = await weatherMutation.mutateAsync({ latitude: currentLocation.latitude, longitude: currentLocation.longitude });
+        const context = [
+          "DADOS CONSULTADOS PELO NORBY — METEOROLOGIA",
+          `Fonte: ${weather.provider} (${weather.sourceUrl})`,
+          `Atualização da consulta: ${new Date(weather.fetchedAt).toLocaleString("pt-BR")}`,
+          `Fuso horário: ${weather.timezone}`,
+          `Agora: ${weather.current.description}; temperatura ${weather.current.temperatureC ?? "indisponível"} °C; sensação térmica ${weather.current.feelsLikeC ?? "indisponível"} °C; umidade ${weather.current.humidityPercent ?? "indisponível"}%; chuva ${weather.current.rainMm ?? "indisponível"} mm; vento ${weather.current.windKmh ?? "indisponível"} km/h.`,
+          `Próximas horas: ${weather.nextHours.map((hour) => `${hour.time}: ${hour.description}, ${hour.temperatureC ?? "?"} °C, probabilidade de precipitação ${hour.precipitationProbability ?? "não informada"}%, precipitação ${hour.precipitationMm ?? "não informada"} mm`).join(" | ")}`,
+          `Próximos dias: ${weather.daily.map((day) => `${day.date}: ${day.description}, mínima ${day.minC ?? "?"} °C, máxima ${day.maxC ?? "?"} °C, probabilidade máxima de chuva ${day.precipitationProbabilityMax ?? "não informada"}%`).join(" | ")}`,
+          "Estes dados são previsão/modelagem meteorológica, não alerta oficial da Defesa Civil.",
+        ].join("\n");
+        const response = await chatMutation.mutateAsync({ message, transportContext: context });
+        addNorbyMessage(response.message);
+        if (voiceEnabled) void speakNorby(response.message);
+        trackCommand("success");
+      } catch {
+        addNorbyMessage("Não consegui obter os dados meteorológicos agora. Tente novamente em instantes.");
+        trackCommand("failure");
+      }
+      return;
+    }
+
+    const asksOccurrence = /acidente|interdi[cç][aã]o|bloqueio|desvio|obra|alagamento|enchente|manifesta[cç][aã]o|greve|ocorr[eê]ncia|tr[aâ]nsito|not[ií]cia|not[ií]cias/.test(message.toLowerCase());
+    if (asksOccurrence) {
+      try {
+        const occurrence = await occurrencesMutation.mutateAsync({
+          location: activeRoute?.origin.address ?? activeRoute?.destination.address,
+          latitude: currentLocation?.latitude,
+          longitude: currentLocation?.longitude,
+        });
+        const context = [
+          "DADOS CONSULTADOS PELO NORBY — OCORRÊNCIAS E NOTÍCIAS",
+          `Fonte: ${occurrence.provider}; consulta: ${new Date(occurrence.searchedAt).toLocaleString("pt-BR")}; recorte: ${occurrence.location}; janela de busca: últimos 3 dias.`,
+          ...occurrence.results.map((item) => `[${item.category}] ${item.title} — ${item.source}; publicação: ${item.publishedAt ?? "data não informada"}; link: ${item.url}`),
+          occurrence.results.length ? "" : "Nenhum resultado foi encontrado para este recorte. Isso não comprova que não existam ocorrências.",
+          occurrence.disclaimer,
+        ].filter(Boolean).join("\n");
+        const response = await chatMutation.mutateAsync({ message, transportContext: context });
+        addNorbyMessage(response.message);
+        if (voiceEnabled) void speakNorby(response.message);
+        trackCommand("success");
+      } catch {
+        addNorbyMessage("Não consegui consultar as notícias e ocorrências agora. Tente novamente em instantes.");
+        trackCommand("failure");
+      }
+      return;
+    }
+
+    const asksWebSearch = /pesquis|procura na internet|busca na internet|na internet|pesquise sobre|me informe sobre/.test(message.toLowerCase());
+    if (asksWebSearch) {
+      try {
+        const search = await webSearchMutation.mutateAsync({ query: message });
+        const context = [
+          "DADOS CONSULTADOS PELO NORBY — PESQUISA NA INTERNET",
+          `Fonte de busca: ${search.provider}; consulta: ${new Date(search.searchedAt).toLocaleString("pt-BR")}.`,
+          ...search.results.map((item, index) => `${index + 1}. ${item.title} — ${item.source}. ${item.snippet} Link: ${item.url}`),
+          search.results.length ? "" : "A pesquisa não retornou resultados utilizáveis nesta tentativa.",
+        ].filter(Boolean).join("\n");
+        const response = await chatMutation.mutateAsync({ message, transportContext: context });
+        addNorbyMessage(response.message);
+        if (voiceEnabled) void speakNorby(response.message);
+        trackCommand("success");
+      } catch {
+        addNorbyMessage("A pesquisa na internet está indisponível neste momento. Tente novamente em instantes.");
+        trackCommand("failure");
+      }
+      return;
+    }
 
     if (awaitingCrowdRef.current) {
       const level = parseCrowdLevelFromText(message);

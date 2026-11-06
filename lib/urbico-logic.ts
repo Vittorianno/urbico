@@ -3,6 +3,9 @@ import type { NorbyIntent } from "./norby-intents";
 
 export function getNorbyReply(text: string, transportContext?: string) {
   const normalized = text.toLowerCase();
+  if (transportContext?.includes("DADOS CONSULTADOS PELO NORBY")) {
+    return `Consultei fontes externas para responder. Aqui estão os dados disponíveis:\n\n${transportContext}`;
+  }
   if (normalized.includes("casa") || normalized.includes("trabalho")) {
     return "Posso usar um local salvo como destino. Abra Rotas para confirmar o ponto de partida e comparar opções com os dados de transporte disponíveis.";
   }

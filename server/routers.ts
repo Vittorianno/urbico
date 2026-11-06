@@ -6,6 +6,7 @@ import { systemRouter } from "./_core/systemRouter";
 import { adminProcedure, protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { geocode, planWalkingRoute, suggestAddresses } from "./integrations/open-geospatial";
 import { askNorby } from "./integrations/norby";
+import { getWeather, searchInternet, searchMobilityOccurrences } from "./integrations/norby-intelligence";
 import { getLineStops, getLineVehicles, getStopPredictions, searchLines, searchStops } from "./integrations/sptrans";
 import {
   buildGoogleAuthUrl,
@@ -166,7 +167,21 @@ export const appRouter = router({
       ),
   }),
   norby: router({
-    chat: publicProcedure.input(z.object({ message: z.string().trim().min(1).max(700), transportContext: z.string().trim().max(3000).optional() })).mutation(({ input }) => safeIntegration(async () => ({ message: await askNorby(input.message, input.transportContext) }))),
+    weather: publicProcedure
+      .input(z.object({ latitude: z.number().min(-90).max(90), longitude: z.number().min(-180).max(180) }))
+      .query(({ input }) => safeIntegration(() => getWeather(input.latitude, input.longitude))),
+    search: publicProcedure
+      .input(z.object({ query: z.string().trim().min(2).max(240) }))
+      .query(({ input }) => safeIntegration(() => searchInternet(input.query))),
+    occurrences: publicProcedure
+      .input(z.object({
+        query: z.string().trim().max(160).optional(),
+        location: z.string().trim().min(2).max(160).optional(),
+        latitude: z.number().min(-90).max(90).optional(),
+        longitude: z.number().min(-180).max(180).optional(),
+      }).refine((value) => (value.latitude == null) === (value.longitude == null), "Latitude e longitude devem ser informadas juntas."))
+      .query(({ input }) => safeIntegration(() => searchMobilityOccurrences(input))),
+    chat: publicProcedure.input(z.object({ message: z.string().trim().min(1).max(700), transportContext: z.string().trim().max(8000).optional() })).mutation(({ input }) => safeIntegration(async () => ({ message: await askNorby(input.message, input.transportContext) }))),
   }),
   departureAlerts: router({
     arm: publicProcedure.input(z.object({ installationId: z.string().uuid(), appointmentLabel: z.string().trim().min(1).max(160), appointmentAt: z.coerce.date(), lineId: z.number().int().positive(), destinationLatitude: z.number().min(-90).max(90), destinationLongitude: z.number().min(-180).max(180), latitude: z.number().min(-90).max(90), longitude: z.number().min(-180).max(180), locationConsented: z.literal(true) })).mutation(async ({ input }) => {
