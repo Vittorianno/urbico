@@ -20,7 +20,11 @@ import { colors, PrimaryButton } from "@/components/urbico-ui";
 import { useAuth } from "@/hooks/use-auth";
 import * as Api from "@/lib/_core/api";
 import { analytics } from "@/lib/analytics";
-import { isSupabaseConfigured, supabase } from "@/lib/_core/supabase";
+import {
+  isSupabaseConfigured,
+  returnedFromOAuth,
+  supabase,
+} from "@/lib/_core/supabase";
 
 type Mode = "signIn" | "signUp";
 
@@ -43,14 +47,11 @@ export default function LoginScreen() {
   // FIX (OAuth Google, web): se a página abriu voltando do Google (?code=,
   // #access_token= ou ?error=), o supabase-js pode terminar a troca do código
   // ANTES deste componente assinar onAuthStateChange. Nesse caso o evento que
-  // chega é INITIAL_SESSION (não SIGNED_IN) e o login ficaria parado. Captura
-  // isso uma única vez, na primeira renderização, antes de o supabase-js
-  // limpar a URL.
-  const returningFromOAuth = useRef<boolean>(
-    Platform.OS === "web" &&
-      typeof window !== "undefined" &&
-      /[?&#](code|access_token|error)=/.test(window.location.href),
-  );
+  // chega é INITIAL_SESSION (não SIGNED_IN) e o login ficaria parado. A
+  // detecção agora é feita em lib/_core/supabase.ts, na carga do módulo e
+  // antes de o supabase-js limpar a URL — não depende mais de quando este
+  // componente é montado.
+  const returningFromOAuth = useRef<boolean>(returnedFromOAuth);
   const [mode, setMode] = useState<Mode>("signIn");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -72,9 +73,10 @@ export default function LoginScreen() {
       return completingSession.current.promise;
 
     const promise = (async () => {
-      const urbicoSessionToken = await Api.establishSession(accessToken);
-      if (!urbicoSessionToken)
-        throw new Error("Não foi possível iniciar a sessão. Tente novamente.");
+      // FIX: propaga o motivo real da falha (servidor fora do ar, build sem
+      // EXPO_PUBLIC_API_BASE_URL, e-mail não confirmado...) em vez de uma
+      // mensagem genérica.
+      const urbicoSessionToken = await Api.establishSessionOrThrow(accessToken);
       if (Platform.OS !== "web") {
         const { setSessionToken } = await import("@/lib/_core/auth");
         await setSessionToken(urbicoSessionToken);
@@ -130,6 +132,21 @@ export default function LoginScreen() {
     );
     return () => subscription.subscription.unsubscribe();
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // FIX (OAuth Google, web): se o Google devolveu um erro (?error=...
+  // &error_description=...), o supabase-js não dispara nenhum evento de
+  // autenticação e o usuário via só a tela de login normal, sem explicação.
+  useEffect(() => {
+    if (Platform.OS !== "web" || !returnedFromOAuth) return;
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(
+      window.location.search || window.location.hash.replace(/^#/, ""),
+    );
+    const providerError = params.get("error_description") ?? params.get("error");
+    if (providerError) {
+      Alert.alert("Não foi possível continuar com o Google", providerError);
+    }
   }, []);
 
   const handleSubmit = async () => {
