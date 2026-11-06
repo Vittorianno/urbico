@@ -54,10 +54,25 @@ function isSecureRequest(req: Request) {
  * Extract parent domain for cookie sharing across subdomains.
  * e.g., "3000-xxx.manuspre.computer" -> ".manuspre.computer"
  * This allows cookies set by 3000-xxx to be read by 8081-xxx
+ *
+ * FIX (login web em produção): o domínio-pai só é usado no padrão de sandbox
+ * em nuvem "<porta>-<id>.<domínio>" (onde API e Metro vivem em subdomínios
+ * irmãos). Antes, QUALQUER host com 3+ partes recebia o domínio-pai — para
+ * `urbico.duckdns.org` isso gerava `Domain=.duckdns.org`, que é um sufixo
+ * público: o navegador rejeita o cookie silenciosamente e o login web nunca
+ * "pegava" em produção. Fora do padrão de sandbox o cookie fica restrito ao
+ * próprio host (sem atributo Domain), que é o correto quando app e API são
+ * servidos pelo mesmo host.
  */
 function getParentDomain(hostname: string): string | undefined {
   // Don't set domain for localhost or IP addresses
   if (LOCAL_HOSTS.has(hostname) || isIpAddress(hostname)) {
+    return undefined;
+  }
+
+  // Só o padrão de sandbox "3000-xxx.domínio" compartilha cookie entre
+  // subdomínios irmãos.
+  if (!/^\d{2,5}-/.test(hostname)) {
     return undefined;
   }
 
