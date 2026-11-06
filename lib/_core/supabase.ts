@@ -8,6 +8,16 @@ const hasValidSupabaseUrl = Boolean(supabaseUrl && /^https:\/\/[^\s/]+\.supabase
 
 export const isSupabaseConfigured = hasValidSupabaseUrl && Boolean(supabaseAnonKey);
 
+// FIX (OAuth Google, web): detectado AQUI, na carga do módulo e ANTES de
+// createClient() abaixo — o supabase-js (detectSessionInUrl) troca o `code` e
+// limpa a URL logo ao ser criado. Detectar só na primeira renderização da
+// tela de login deixava uma janela em que a URL já tinha sido limpa e o
+// retorno do Google não era reconhecido (login parado após voltar do Google).
+export const returnedFromOAuth: boolean =
+  Platform.OS === "web" &&
+  typeof window !== "undefined" &&
+  /[?&#](code|access_token|error)=/.test(window.location.href);
+
 if (!isSupabaseConfigured) {
   // Não lança: o app deve continuar abrindo (outras telas não dependem de
   // login) mesmo sem essas variáveis configuradas, só o login em si falha.
