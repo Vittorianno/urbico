@@ -122,3 +122,64 @@ export async function establishSession(token: string): Promise<string | null> {
     return null;
   }
 }
+
+// FIX (login com Google): versão de establishSession que NÃO engole o motivo
+// da falha. Antes, qualquer erro (backend fora do ar, EXPO_PUBLIC_API_BASE_URL
+// ausente no build nativo, e-mail não confirmado, banco indisponível) virava
+// o mesmo "Não foi possível iniciar a sessão" e era impossível saber por quê.
+// Usada por app/login.tsx; establishSession acima permanece inalterada para
+// quem já a usa.
+export async function establishSessionOrThrow(token: string): Promise<string> {
+  const baseUrl = getApiBaseUrl();
+
+  if (Platform.OS !== "web" && !baseUrl) {
+    throw new Error(
+      "Servidor do Urbico não configurado neste build (EXPO_PUBLIC_API_BASE_URL ausente).",
+    );
+  }
+
+  let response: Response;
+  try {
+    response = await fetch(`${baseUrl}/api/auth/session`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      credentials: "include", // permite o Set-Cookie no web
+    });
+  } catch (error) {
+    console.error("[API] establishSession network error:", error);
+    throw new Error(
+      "Não foi possível falar com o servidor do Urbico. Verifique sua conexão e tente novamente.",
+    );
+  }
+
+  if (!response.ok) {
+    let serverMessage = "";
+    try {
+      const body = (await response.json()) as { error?: string };
+      serverMessage = body.error ?? "";
+    } catch {
+      // resposta não-JSON (ex.: página HTML de um proxy) — usa mensagem padrão
+    }
+    console.error("[API] establishSession failed:", response.status, serverMessage);
+    if (response.status === 503) {
+      throw new Error("Serviço temporariamente indisponível. Tente novamente em instantes.");
+    }
+    throw new Error(
+      serverMessage || `Não foi possível iniciar a sessão (erro ${response.status}).`,
+    );
+  }
+
+  let result: { app_session_id?: string };
+  try {
+    result = (await response.json()) as { app_session_id?: string };
+  } catch {
+    throw new Error("Resposta inesperada do servidor ao iniciar a sessão.");
+  }
+  if (!result.app_session_id) {
+    throw new Error("O servidor não devolveu a sessão. Tente novamente.");
+  }
+  return result.app_session_id;
+}
