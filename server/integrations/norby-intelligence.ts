@@ -19,6 +19,7 @@ export type WeatherSnapshot = {
   daily: Array<{ date: string; minC: number | null; maxC: number | null; precipitationProbabilityMax: number | null; description: string }>;
   sourceUrl: string;
   officialAlerts: Array<{ title: string; severity: string; startsAt: string | null; endsAt: string | null; details: string; sourceUrl: string }>;
+  officialAlertsStatus: "available" | "no_active_alerts" | "unavailable";
 };
 
 export type SearchResult = { title: string; url: string; snippet: string; source: string };
@@ -98,7 +99,7 @@ export async function getWeather(latitude: number, longitude: number): Promise<W
   }));
 
   const resolvedPlace = await resolveCity(latitude, longitude);
-  const officialAlerts = resolvedPlace ? await getInmetAlerts(resolvedPlace) : [];
+  const inmet = resolvedPlace ? await getInmetAlerts(resolvedPlace) : { alerts: [], status: "unavailable" as const };
 
   return {
     provider: "Open-Meteo",
@@ -118,7 +119,8 @@ export async function getWeather(latitude: number, longitude: number): Promise<W
     nextHours,
     daily,
     sourceUrl: "https://open-meteo.com/",
-    officialAlerts,
+    officialAlerts: inmet.alerts,
+    officialAlertsStatus: inmet.status,
   };
 }
 
@@ -209,17 +211,17 @@ function alertText(record: Record<string, unknown>, keys: string[]): string {
   return "";
 }
 
-async function getInmetAlerts(place: string): Promise<WeatherSnapshot["officialAlerts"]> {
+async function getInmetAlerts(place: string): Promise<{ alerts: WeatherSnapshot["officialAlerts"]; status: WeatherSnapshot["officialAlertsStatus"] }> {
   const stateName = place.split(",").map((part) => part.trim()).filter(Boolean).at(-1)?.toLowerCase() ?? "";
   const stateCode = BRAZIL_STATE_CODES[stateName];
-  if (!stateCode) return [];
+  if (!stateCode) return { alerts: [], status: "unavailable" };
   try {
     const response = await fetchWithTimeout(INMET_ACTIVE_ALERTS_URL, {
       headers: { accept: "application/json", "user-agent": "Urbico/1.0 (mobilidade urbana)" },
     }, 6_000);
-    if (!response.ok) return [];
+    if (!response.ok) return { alerts: [], status: "unavailable" };
     const payload = await response.json() as unknown;
-    return collectAlertObjects(payload).flatMap((item) => {
+    const alerts = collectAlertObjects(payload).flatMap((item) => {
       const serialized = JSON.stringify(item).toLowerCase();
       const stateMatches = serialized.includes(stateName)
         || serialized.includes('"uf":"' + stateCode.toLowerCase() + '"')
@@ -236,8 +238,9 @@ async function getInmetAlerts(place: string): Promise<WeatherSnapshot["officialA
         sourceUrl: "https://avisos.inmet.gov.br/",
       }];
     }).slice(0, 10);
+    return { alerts, status: alerts.length ? "available" : "no_active_alerts" };
   } catch {
-    return [];
+    return { alerts: [], status: "unavailable" };
   }
 }
 

@@ -97,7 +97,7 @@ export default function NorbyScreen() {
         durationMs: Date.now() - startedAt,
       });
 
-    const asksWeather = /clima|tempo agora|previs[aã]o do tempo|vai chover|chance de chuva|temperatura|est[aá] chovendo/.test(message.toLowerCase());
+    const asksWeather = /clima|tempo agora|previs[aã]o|vai chover|chance de chuva|temperatura|est[aá] chovendo/.test(message.toLowerCase());
     if (asksWeather) {
       if (!currentLocation) {
         const reply = "Para consultar o clima da sua região, preciso da sua localização. Ative a permissão de localização do Urbico e tente novamente.";
@@ -116,7 +116,8 @@ export default function NorbyScreen() {
           `Agora: ${weather.current.description}; temperatura ${weather.current.temperatureC ?? "indisponível"} °C; sensação térmica ${weather.current.feelsLikeC ?? "indisponível"} °C; umidade ${weather.current.humidityPercent ?? "indisponível"}%; chuva ${weather.current.rainMm ?? "indisponível"} mm; vento ${weather.current.windKmh ?? "indisponível"} km/h.`,
           `Próximas horas: ${weather.nextHours.map((hour) => `${hour.time}: ${hour.description}, ${hour.temperatureC ?? "?"} °C, probabilidade de precipitação ${hour.precipitationProbability ?? "não informada"}%, precipitação ${hour.precipitationMm ?? "não informada"} mm`).join(" | ")}`,
           `Próximos dias: ${weather.daily.map((day) => `${day.date}: ${day.description}, mínima ${day.minC ?? "?"} °C, máxima ${day.maxC ?? "?"} °C, probabilidade máxima de chuva ${day.precipitationProbabilityMax ?? "não informada"}%`).join(" | ")}`,
-          "Estes dados são previsão/modelagem meteorológica, não alerta oficial da Defesa Civil.",
+          `Alertas oficiais do INMET: ${weather.officialAlertsStatus === "available" ? weather.officialAlerts.map((alert) => `${alert.title} — ${alert.severity}; vigência: ${alert.startsAt ?? "não informada"} até ${alert.endsAt ?? "não informada"}; recomendações: ${alert.details}; fonte: ${alert.sourceUrl}`).join(" | ") : weather.officialAlertsStatus === "no_active_alerts" ? "A consulta oficial foi concluída e não retornou alertas ativos para o estado identificado." : "Não foi possível confirmar os alertas oficiais do INMET nesta consulta."}`,
+          "A previsão Open-Meteo é modelagem meteorológica; alertas oficiais só são afirmados quando a consulta ao INMET é concluída.",
         ].join("\n");
         const response = await chatMutation.mutateAsync({ message, transportContext: context });
         addNorbyMessage(response.message);
