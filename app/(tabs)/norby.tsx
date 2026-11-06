@@ -39,9 +39,7 @@ export default function NorbyScreen() {
   const completedTurnRef = useRef(false);
   const listeningRef = useRef(false);
   const chatMutation = trpc.norby.chat.useMutation();
-  const weatherMutation = trpc.norby.weather.useMutation();
-  const webSearchMutation = trpc.norby.search.useMutation();
-  const occurrencesMutation = trpc.norby.occurrences.useMutation();
+  const norbyUtils = trpc.useUtils();
   const crowdSubmitMutation = trpc.crowdReports.submit.useMutation();
   const activeLineId = activeRoute?.line?.id;
   const liveLineVehicles = trpc.transit.lineVehicles.useQuery(
@@ -109,7 +107,7 @@ export default function NorbyScreen() {
         return;
       }
       try {
-        const weather = await weatherMutation.mutateAsync({ latitude: currentLocation.latitude, longitude: currentLocation.longitude });
+        const weather = await norbyUtils.norby.weather.fetch({ latitude: currentLocation.latitude, longitude: currentLocation.longitude });
         const context = [
           "DADOS CONSULTADOS PELO NORBY — METEOROLOGIA",
           `Fonte: ${weather.provider} (${weather.sourceUrl})`,
@@ -131,10 +129,10 @@ export default function NorbyScreen() {
       return;
     }
 
-    const asksOccurrence = /acidente|interdi[cç][aã]o|bloqueio|desvio|obra|alagamento|enchente|manifesta[cç][aã]o|greve|ocorr[eê]ncia|tr[aâ]nsito|not[ií]cia|not[ií]cias/.test(message.toLowerCase());
+    const asksOccurrence = /acidente|interdi[cç][aã]o|bloqueio|desvio|obra|alagamento|enchente|manifesta[cç][aã]o|greve|ocorr[eê]ncia|tr[aâ]nsito/.test(message.toLowerCase());
     if (asksOccurrence) {
       try {
-        const occurrence = await occurrencesMutation.mutateAsync({
+        const occurrence = await norbyUtils.norby.occurrences.fetch({
           location: activeRoute?.origin.address ?? activeRoute?.destination.address,
           latitude: currentLocation?.latitude,
           longitude: currentLocation?.longitude,
@@ -157,10 +155,10 @@ export default function NorbyScreen() {
       return;
     }
 
-    const asksWebSearch = /pesquis|procura na internet|busca na internet|na internet|pesquise sobre|me informe sobre/.test(message.toLowerCase());
+    const asksWebSearch = /pesquis|procura na internet|busca na internet|na internet|pesquise sobre|me informe sobre|not[ií]cia|not[ií]cias/.test(message.toLowerCase());
     if (asksWebSearch) {
       try {
-        const search = await webSearchMutation.mutateAsync({ query: message });
+        const search = await norbyUtils.norby.search.fetch({ query: message });
         const context = [
           "DADOS CONSULTADOS PELO NORBY — PESQUISA NA INTERNET",
           `Fonte de busca: ${search.provider}; consulta: ${new Date(search.searchedAt).toLocaleString("pt-BR")}.`,

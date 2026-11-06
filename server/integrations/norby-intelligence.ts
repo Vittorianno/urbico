@@ -18,6 +18,7 @@ export type WeatherSnapshot = {
   nextHours: Array<{ time: string; temperatureC: number | null; precipitationProbability: number | null; precipitationMm: number | null; description: string }>;
   daily: Array<{ date: string; minC: number | null; maxC: number | null; precipitationProbabilityMax: number | null; description: string }>;
   sourceUrl: string;
+  officialAlerts: Array<{ title: string; severity: string; startsAt: string | null; endsAt: string | null; details: string; sourceUrl: string }>;
 };
 
 export type SearchResult = { title: string; url: string; snippet: string; source: string };
@@ -96,6 +97,9 @@ export async function getWeather(latitude: number, longitude: number): Promise<W
     description: weatherDescription(numberOrNull(payload.daily?.weather_code?.[i])),
   }));
 
+  const resolvedPlace = await resolveCity(latitude, longitude);
+  const officialAlerts = resolvedPlace ? await getInmetAlerts(resolvedPlace) : [];
+
   return {
     provider: "Open-Meteo",
     fetchedAt: new Date().toISOString(),
@@ -114,6 +118,7 @@ export async function getWeather(latitude: number, longitude: number): Promise<W
     nextHours,
     daily,
     sourceUrl: "https://open-meteo.com/",
+    officialAlerts,
   };
 }
 
@@ -178,6 +183,62 @@ function classifyOccurrence(title: string): string {
   if (/greve|manifesta|protesto/.test(text)) return "Mobilização";
   if (/ônibus|onibus|metrô|metro|transporte|trânsito|transito/.test(text)) return "Transporte e trânsito";
   return "Ocorrência";
+}
+
+const INMET_ACTIVE_ALERTS_URL = "https://apiprevmet3.inmet.gov.br/avisos/ativos";
+const BRAZIL_STATE_CODES: Record<string, string> = {
+  "acre":"AC","alagoas":"AL","amapá":"AP","amazonas":"AM","bahia":"BA","ceará":"CE","distrito federal":"DF","espírito santo":"ES","goiás":"GO","maranhão":"MA","mato grosso":"MT","mato grosso do sul":"MS","minas gerais":"MG","pará":"PA","paraíba":"PB","paraná":"PR","pernambuco":"PE","piauí":"PI","rio de janeiro":"RJ","rio grande do norte":"RN","rio grande do sul":"RS","rondônia":"RO","roraima":"RR","santa catarina":"SC","são paulo":"SP","sergipe":"SE","tocantins":"TO",
+};
+
+function collectAlertObjects(value: unknown): Array<Record<string, unknown>> {
+  if (Array.isArray(value)) return value.filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object");
+  if (!value || typeof value !== "object") return [];
+  const record = value as Record<string, unknown>;
+  for (const key of ["avisos", "alertas", "data", "results"]) {
+    if (Array.isArray(record[key])) return collectAlertObjects(record[key]);
+  }
+  return [];
+}
+
+function alertText(record: Record<string, unknown>, keys: string[]): string {
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+    if (typeof value === "number") return String(value);
+  }
+  return "";
+}
+
+async function getInmetAlerts(place: string): Promise<WeatherSnapshot["officialAlerts"]> {
+  const stateName = place.split(",").map((part) => part.trim()).filter(Boolean).at(-1)?.toLowerCase() ?? "";
+  const stateCode = BRAZIL_STATE_CODES[stateName];
+  if (!stateCode) return [];
+  try {
+    const response = await fetchWithTimeout(INMET_ACTIVE_ALERTS_URL, {
+      headers: { accept: "application/json", "user-agent": "Urbico/1.0 (mobilidade urbana)" },
+    }, 6_000);
+    if (!response.ok) return [];
+    const payload = await response.json() as unknown;
+    return collectAlertObjects(payload).flatMap((item) => {
+      const serialized = JSON.stringify(item).toLowerCase();
+      const stateMatches = serialized.includes(stateName)
+        || serialized.includes('"uf":"' + stateCode.toLowerCase() + '"')
+        || serialized.includes('"estado":"' + stateCode.toLowerCase() + '"')
+        || serialized.includes('"sigla":"' + stateCode.toLowerCase() + '"');
+      if (!stateMatches) return [];
+      const title = alertText(item, ["descricao", "evento", "tipo", "nome", "aviso"]) || "Aviso meteorológico ativo";
+      return [{
+        title,
+        severity: alertText(item, ["severidade", "nivel", "risco", "severity"]) || "Severidade não informada",
+        startsAt: alertText(item, ["inicio", "data_inicio", "start"]) || null,
+        endsAt: alertText(item, ["fim", "data_fim", "end"]) || null,
+        details: alertText(item, ["recomendacoes", "recomendacao", "descricao_risco", "texto"]) || title,
+        sourceUrl: "https://avisos.inmet.gov.br/",
+      }];
+    }).slice(0, 10);
+  } catch {
+    return [];
+  }
 }
 
 async function resolveCity(latitude?: number, longitude?: number): Promise<string | null> {
