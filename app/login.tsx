@@ -36,7 +36,8 @@ const NATIVE_OAUTH_REDIRECT = "urbico://login";
 // duplicar telas/áreas de login em nenhum outro lugar do app — qualquer
 // funcionalidade que precise de conta só usa esta mesma sessão via
 // useAuth()/isAuthenticated). "Continuar com Google" é o método preferido;
-// e-mail/senha continua disponível como alternativa.
+// e-mail/senha continua disponível como alternativa. "Continuar como
+// visitante" volta ao app sem conta (modo visitante).
 export default function LoginScreen() {
   const { refresh } = useAuth({ autoFetch: false });
   const completingSession = useRef<{
@@ -400,6 +401,21 @@ export default function LoginScreen() {
               {isSignUp ? "Já tem conta? Entrar" : "Não tem conta? Criar uma"}
             </Text>
           </Pressable>
+
+          {/* Modo visitante: mapa, linhas, rotas, horários e Norby (consultas
+              públicas) funcionam sem conta. Conta só é necessária para
+              sincronizar favoritos/agenda entre aparelhos. */}
+          <Pressable
+            onPress={() => router.replace("/(tabs)")}
+            disabled={loading}
+            accessibilityRole="button"
+            style={({ pressed }) => [
+              styles.guest,
+              pressed && styles.pressed,
+            ]}
+          >
+            <Text style={styles.guestText}>Continuar como visitante</Text>
+          </Pressable>
         </View>
       </KeyboardAvoidingView>
     </ScreenContainer>
@@ -470,5 +486,13 @@ const styles = StyleSheet.create({
   },
   switchMode: { marginTop: 18, alignItems: "center", paddingVertical: 8 },
   switchModeText: { color: colors.blue, fontSize: 13, fontWeight: "700" },
+  guest: {
+    marginTop: 10,
+    height: 46,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  guestText: { color: colors.muted, fontSize: 13, fontWeight: "700" },
   pressed: { opacity: 0.7 },
 });
