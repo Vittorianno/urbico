@@ -39,7 +39,7 @@ if (!isSupabaseConfigured) {
  * ler/gravar tabelas do Supabase diretamente.
  */
 export const supabase = createClient(
-  hasValidSupabaseUrl ? supabaseUrl : "http://127.0.0.1:9",
+  hasValidSupabaseUrl && supabaseUrl ? supabaseUrl : "http://127.0.0.1:9",
   supabaseAnonKey || "disabled-anon-key",
   {
     auth: {
